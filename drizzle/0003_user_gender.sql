@@ -1,0 +1,2 @@
+ALTER TABLE "users" ADD COLUMN "gender" text;--> statement-breakpoint
+ALTER TABLE "users" ADD CONSTRAINT "users_gender_chk" CHECK ("users"."gender" is null or "users"."gender" in ('female','male','non_binary','prefer_not_to_say'));

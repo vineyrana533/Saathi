@@ -1,0 +1,193 @@
+@import 'tailwindcss';
+
+/* Saathi design tokens: docs/design-system.md section 10. The default palette is removed. */
+@theme {
+  --color-*: initial;
+  --color-paper: #f6f1e8;
+  --color-paper-2: #eee6d8;
+  --color-surface: #ffffff;
+  --color-ink: #1c1a17;
+  --color-ink-2: #5a534a;
+  --color-ink-3: #6e665b;
+  --color-ink-on-dark: #f6f1e8;
+  --color-ink-on-dark-2: #b8b0a3;
+  --color-rule: #d3cfc7;
+  --color-rule-strong: #b0aca5;
+  --color-field-border: #7e7b75;
+  --color-accent: #a93d27;
+  --color-accent-strong: #8c3120;
+  --color-accent-tint: #f3ded6;
+  --color-trust: #1f2a44;
+  --color-trust-link: #27407a;
+  --color-trust-tint: #e4e8f1;
+  --color-marigold: #e3a13b;
+  --color-marigold-tint: #f8e7c4;
+  --color-success: #2e6b3a;
+  --color-success-tint: #e3eedf;
+  --color-warning: #8a5a12;
+  --color-warning-tint: #f7e8c8;
+  --color-danger: #a3261c;
+  --color-danger-tint: #f6deda;
+  --color-info: #1f5480;
+  --color-info-tint: #dde7f1;
+  --color-focus: #2346b8;
+  --color-focus-on-dark: #e3a13b;
+  --color-white: #ffffff;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  --font-display: var(--font-bricolage), 'Segoe UI', system-ui, sans-serif;
+  --font-accent: var(--font-instrument), Georgia, 'Times New Roman', serif;
+  --font-sans: var(--font-public-sans), 'Segoe UI', system-ui, sans-serif;
+
+  --text-display-xl: clamp(2.75rem, 0.989rem + 7.514vw, 7rem);
+  --text-display-xl--line-height: 0.92;
+  --text-display-xl--letter-spacing: -0.04em;
+  --text-display-l: clamp(2.25rem, 1.111rem + 4.862vw, 5rem);
+  --text-display-l--line-height: 0.95;
+  --text-display-l--letter-spacing: -0.035em;
+  --text-h1: clamp(2rem, 1.378rem + 2.652vw, 3.5rem);
+  --text-h1--line-height: 1;
+  --text-h1--letter-spacing: -0.03em;
+  --text-h2: clamp(1.625rem, 1.262rem + 1.547vw, 2.5rem);
+  --text-h2--line-height: 1.08;
+  --text-h2--letter-spacing: -0.02em;
+  --text-h3: clamp(1.3125rem, 1.131rem + 0.773vw, 1.75rem);
+  --text-h3--line-height: 1.2;
+  --text-h3--letter-spacing: -0.01em;
+  --text-h4: clamp(1.125rem, 1.047rem + 0.331vw, 1.3125rem);
+  --text-h4--line-height: 1.3;
+  --text-body-l: clamp(1.125rem, 1.073rem + 0.221vw, 1.25rem);
+  --text-body-l--line-height: 1.55;
+  --text-body: clamp(1rem, 0.974rem + 0.11vw, 1.0625rem);
+  --text-body--line-height: 1.6;
+  --text-small: 0.875rem;
+  --text-small--line-height: 1.5;
+  --text-label: 0.8125rem;
+  --text-label--line-height: 1.3;
+  --text-label--letter-spacing: 0.08em;
+
+  --breakpoint-sm: 30rem;
+  --breakpoint-md: 48rem;
+  --breakpoint-lg: 64rem;
+  --breakpoint-xl: 80rem;
+
+  --spacing-section: clamp(4rem, 2.343rem + 7.072vw, 8rem);
+  --container-content: 80rem;
+
+  --radius-none: 0;
+  --radius-xs: 2px;
+  --radius-full: 9999px;
+
+  --shadow-pop: 0 1px 2px rgb(28 26 23 / 0.08), 0 8px 24px rgb(28 26 23 / 0.1);
+
+  --ease-ui: cubic-bezier(0.2, 0, 0, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
+}
+
+@layer base {
+  html {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    scroll-padding-top: 88px;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    font-size: var(--text-body);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    background: var(--color-paper);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+  .on-dark :focus-visible {
+    outline-color: var(--color-focus-on-dark);
+  }
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
+  }
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 1ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 1ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  .container-page {
+    width: 100%;
+    max-width: var(--container-content);
+    margin-inline: auto;
+    padding-inline: 1rem;
+  }
+  @media (min-width: 48rem) {
+    .container-page {
+      padding-inline: 2rem;
+    }
+  }
+  @media (min-width: 64rem) {
+    .container-page {
+      padding-inline: 3rem;
+    }
+  }
+  .eyebrow {
+    font-size: var(--text-label);
+    line-height: var(--text-label--line-height);
+    letter-spacing: var(--text-label--letter-spacing);
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--color-ink-2);
+  }
+  .accent-word {
+    font-family: var(--font-accent);
+    font-style: italic;
+    font-weight: 400;
+    color: var(--color-accent);
+    letter-spacing: -0.01em;
+  }
+  .prose-measure {
+    max-width: 65ch;
+  }
+  .link {
+    color: var(--color-trust-link);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .link:hover {
+      text-decoration-thickness: 2px;
+    }
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}

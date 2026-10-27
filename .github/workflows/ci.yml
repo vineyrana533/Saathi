@@ -1,0 +1,30 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Type check
+        run: pnpm typecheck
+      - name: Lint
+        run: pnpm lint
+      - name: Tests (real Postgres 17 via embedded binaries)
+        run: pnpm test
+      - name: Build
+        run: pnpm build
+        env:
+          OTP_PEPPER: ci-only-otp-pepper-not-used-in-any-real-environment
+          DOCUMENT_ENCRYPTION_KEY: Y2ktb25seS1kb2N1bWVudC1rZXktMzItYnl0ZXMhISE=
+          SANDBOX_WEBHOOK_SECRET: ci-only-sandbox-webhook-secret
+          CRON_SECRET: ci-only-cron-secret
