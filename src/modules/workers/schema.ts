@@ -82,7 +82,7 @@ export const workerDocuments = pgTable(
     index('worker_documents_lookup_idx').on(t.workerId, t.docType, t.status, t.expiresOn),
     check(
       'worker_documents_type_chk',
-      sql`${t.docType} in ('driving_licence','police_certificate','id_proof','selfie','profile_photo')`,
+      sql`${t.docType} in ('driving_licence','police_certificate','id_proof','selfie','profile_photo','caregiver_training','first_aid_certificate','nursing_registration','medical_qualification')`,
     ),
     check('worker_documents_status_chk', sql`${t.status} in ('pending','approved','rejected','expired')`),
   ],

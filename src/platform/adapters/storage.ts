@@ -28,9 +28,47 @@ const localEncrypted: DocumentStore = {
   },
 };
 
+const KEY_PATTERN = /^\d{4}-\d{2}\/[0-9a-f-]{36}\.bin$/;
+
 function resolveKey(key: string) {
-  if (!/^\d{4}-\d{2}\/[0-9a-f-]{36}\.bin$/.test(key)) throw new Error('invalid storage key');
+  if (!KEY_PATTERN.test(key)) throw new Error('invalid storage key');
   return path.resolve(env().LOCAL_DOCUMENT_DIR, key);
+}
+
+/**
+ * Supabase Storage, private bucket. Files are AES-256-GCM encrypted before upload, so the bucket
+ * only ever holds ciphertext. Uses the server-only secret key; never called from the browser.
+ */
+const supabaseEncrypted: DocumentStore = {
+  name: 'supabase',
+  async put(content) {
+    const key = `${new Date().toISOString().slice(0, 7)}/${randomUUID()}.bin`;
+    const res = await fetch(objectUrl(key), {
+      method: 'POST',
+      headers: { ...supabaseHeaders(), 'Content-Type': 'application/octet-stream', 'x-upsert': 'false' },
+      body: new Uint8Array(encrypt(content)),
+    });
+    if (!res.ok) throw new Error(`document upload failed (${res.status})`);
+    return { key, sha256: sha256Hex(content) };
+  },
+  async get(key) {
+    const res = await fetch(objectUrl(key), { headers: supabaseHeaders() });
+    if (!res.ok) throw new Error(`document download failed (${res.status})`);
+    return decrypt(Buffer.from(await res.arrayBuffer()));
+  },
+};
+
+function supabaseHeaders() {
+  const { SUPABASE_SECRET_KEY } = env();
+  if (!SUPABASE_SECRET_KEY) throw new Error('SUPABASE_SECRET_KEY is not set');
+  return { apikey: SUPABASE_SECRET_KEY, Authorization: `Bearer ${SUPABASE_SECRET_KEY}` };
+}
+
+function objectUrl(key: string) {
+  const { SUPABASE_URL, SUPABASE_DOCUMENTS_BUCKET } = env();
+  if (!SUPABASE_URL) throw new Error('SUPABASE_URL is not set');
+  if (!KEY_PATTERN.test(key)) throw new Error('invalid storage key');
+  return `${SUPABASE_URL.replace(/\/$/, '')}/storage/v1/object/${SUPABASE_DOCUMENTS_BUCKET}/${key}`;
 }
 
 export function documentStore(): DocumentStore {
@@ -38,7 +76,7 @@ export function documentStore(): DocumentStore {
     case 'local-encrypted':
       return localEncrypted;
     case 'supabase':
-      throw new Error('Supabase Storage adapter is pending project access (decisions.md V-11)');
+      return supabaseEncrypted;
   }
 }
 

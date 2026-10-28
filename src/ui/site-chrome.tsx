@@ -24,7 +24,7 @@ export function SiteHeader({ user }: { user: HeaderUser }) {
         { href: '/account', label: t('nav.account') },
       ]
     : [{ href: '/sign-in', label: t('nav.logIn') }];
-  const cta = { href: '/delhi/personal-driver', label: t('nav.book') };
+  const cta = { href: '/#services', label: t('nav.book') };
   return (
     <header className="sticky top-0 z-40 border-b border-rule bg-paper">
       <Container className="flex h-16 items-center justify-between gap-6 lg:h-[72px]">
@@ -70,13 +70,13 @@ export function SiteFooter({ liveCities }: { liveCities: { slug: string; name: s
           {t('footer.statementBefore')} <span className="font-accent font-normal italic">{t('footer.statementAccent')}</span>
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
-          <ButtonLink href="/delhi/personal-driver">{t('footer.book')}</ButtonLink>
+          <ButtonLink href="/#services">{t('footer.book')}</ButtonLink>
           <ButtonLink href="/work-with-us" variant="onDark">
             {t('footer.apply')}
           </ButtonLink>
         </div>
         <div className="mt-16 grid gap-10 border-t border-ink-on-dark-2/40 pt-10 sm:grid-cols-2 lg:grid-cols-4">
-          <FooterCol title={t('footer.servicesTitle')} links={[{ href: '/delhi/personal-driver', label: 'Personal driver' }, { href: '/delhi/event-staff', label: 'Event and business staff' }, { href: '/delhi/errands', label: 'Errands and appointment help' }]} />
+          <FooterCol title={t('footer.servicesTitle')} links={[{ href: '/delhi/personal-driver', label: 'Personal driver' }, { href: '/delhi/event-staff', label: 'Event and business staff' }, { href: '/delhi/errands', label: 'Errands and appointment help' }, { href: '/delhi/elder-care', label: 'Elder care' }, { href: '/delhi/domestic-help', label: 'Domestic help' }, { href: '/delhi/medical-support', label: 'Medical support at home' }, { href: '/request', label: t('home.otherTitle') }]} />
           <FooterCol
             title={t('footer.citiesTitle')}
             links={[...liveCities.map((c) => ({ href: `/${c.slug}/personal-driver`, label: c.name })), { href: '/mumbai/personal-driver', label: t('footer.mumbaiSoon') }]}

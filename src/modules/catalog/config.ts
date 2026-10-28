@@ -17,7 +17,18 @@ export const bookingQuestionSchema = z.object({
 });
 export type BookingQuestion = z.infer<typeof bookingQuestionSchema>;
 
-export const DOCUMENT_TYPES = ['driving_licence', 'police_certificate', 'id_proof', 'selfie', 'profile_photo'] as const;
+export const DOCUMENT_TYPES = [
+  'driving_licence',
+  'police_certificate',
+  'id_proof',
+  'selfie',
+  'profile_photo',
+  // Tier C (licensed or in-home work)
+  'caregiver_training',
+  'first_aid_certificate',
+  'nursing_registration',
+  'medical_qualification',
+] as const;
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
 
 export const requiredDocumentSchema = z.object({
@@ -61,6 +72,8 @@ export const serviceConfigSchema = z
     customerVerification: z.enum(['phone', 'id']),
     matching: z.enum(['customer_choice', 'auto', 'manual']),
     cancellationPolicy: cancellationPolicySchema,
+    /** Plain-language points for the city page ("what's included"). Content, so it can change without code. */
+    highlights: z.array(z.string().min(1).max(160)).max(6).default([]),
     payment: z.enum(['prepay', 'deposit', 'pay_after']),
     safety: z.object({
       startOtp: z.boolean(),

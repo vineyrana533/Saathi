@@ -1,0 +1,2 @@
+ALTER TABLE "worker_documents" DROP CONSTRAINT "worker_documents_type_chk";--> statement-breakpoint
+ALTER TABLE "worker_documents" ADD CONSTRAINT "worker_documents_type_chk" CHECK ("worker_documents"."doc_type" in ('driving_licence','police_certificate','id_proof','selfie','profile_photo','caregiver_training','first_aid_certificate','nursing_registration','medical_qualification'));

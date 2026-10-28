@@ -1,9 +1,9 @@
-import Link from 'next/link';
 import type { Metadata } from 'next';
 import { t } from '@/i18n';
 import { listServiceCityPairs } from '@/modules/catalog/service';
 import { formatInr } from '@/modules/pricing/engine';
-import { ButtonLink, Container, ImagePlaceholder, SectionTitle, Pill } from '@/ui/primitives';
+import { ButtonLink, Container, ImagePlaceholder, SectionTitle } from '@/ui/primitives';
+import { ServiceGrid } from '@/ui/service-grid';
 import { env } from '@/platform/env';
 
 export const dynamic = 'force-dynamic';
@@ -16,10 +16,12 @@ export const metadata: Metadata = {
 
 export default async function HomePage() {
   const pairs = await listServiceCityPairs();
-  const services = new Map<string, { slug: string; name: string; summary: string; live: string[]; rate: number | null }>();
+  // Tier A services that are active, plus Tier C services shown as "coming later". Tier B stays hidden while its flag is off.
+  const services = new Map<string, { slug: string; name: string; summary: string; tier: string; live: string[]; rate: number | null }>();
   for (const p of pairs) {
-    if (p.riskTier !== 'A' || p.serviceStatus !== 'active') continue;
-    const s = services.get(p.serviceSlug) ?? { slug: p.serviceSlug, name: p.serviceName, summary: p.serviceSummary, live: [], rate: null };
+    const shown = (p.riskTier === 'A' && p.serviceStatus === 'active') || p.riskTier === 'C';
+    if (!shown) continue;
+    const s = services.get(p.serviceSlug) ?? { slug: p.serviceSlug, name: p.serviceName, summary: p.serviceSummary, tier: p.riskTier, live: [], rate: null };
     if (p.status === 'live') s.live.push(p.cityName);
     const rate = (p.pricing as { hourlyRatePaise?: number }).hourlyRatePaise ?? null;
     if (rate != null && (s.rate == null || rate < s.rate)) s.rate = rate;
@@ -61,45 +63,40 @@ export default async function HomePage() {
             </h1>
             <p className="mt-6 text-body-l text-ink-2 prose-measure">{t('home.lede')}</p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <ButtonLink href="/delhi/personal-driver">{t('home.ctaPrimary')}</ButtonLink>
+              <ButtonLink href="#services">{t('home.ctaPrimary')}</ButtonLink>
               <ButtonLink href="/how-it-works" variant="secondary">
                 {t('home.ctaSecondary')}
               </ButtonLink>
             </div>
           </div>
           <div className="lg:col-span-4">
-            <ImagePlaceholder description="a driver's hands on the wheel of a customer's hatchback, Gurugram, daylight" ratio="4 / 5" />
+            <ImagePlaceholder description="people from Saathi at work: a driver, an event host and someone running an errand, Delhi NCR" ratio="4 / 5" />
           </div>
         </Container>
       </section>
 
       <section id="services" aria-labelledby="services-title" className="py-section">
         <Container>
-          <SectionTitle id="services-title">{t('home.servicesTitle')}</SectionTitle>
-          <p className="mt-3 text-ink-2 prose-measure">{t('home.servicesLede')}</p>
-          <ul className="mt-10 border-t border-ink">
-            {[...services.values()].map((s) => (
-              <li key={s.slug} className="grid gap-4 border-b border-rule py-8 md:grid-cols-12 md:items-baseline">
-                <h3 className="font-display text-h2 font-bold md:col-span-5">{s.name}</h3>
-                <div className="md:col-span-5">
-                  <p className="text-body-l">{s.summary}</p>
-                  <p className="mt-3 flex flex-wrap items-center gap-3 text-small">
-                    {s.live.length ? (
-                      <Pill tone="success">{t('home.bookableIn', { cities: s.live.join(', ') })}</Pill>
-                    ) : (
-                      <Pill tone="warning">{t('home.comingSoon')}</Pill>
-                    )}
-                    {s.rate != null && <span className="text-ink-2 tabular">{t('home.fromPrice', { price: formatInr(s.rate) })}</span>}
-                  </p>
-                </div>
-                <div className="md:col-span-2 md:text-right">
-                  <Link className="link font-semibold" href={`/delhi/${s.slug}`}>
-                    {t('home.seeService', { service: s.name.toLowerCase(), city: 'Delhi' })}
-                  </Link>
-                </div>
-              </li>
-            ))}
-          </ul>
+          <div className="mb-10 grid gap-4 lg:grid-cols-12 lg:items-end">
+            <div className="lg:col-span-7">
+              <p className="eyebrow mb-3">{t('home.servicesEyebrow')}</p>
+              <SectionTitle id="services-title">{t('home.servicesTitle')}</SectionTitle>
+            </div>
+            <p className="text-ink-2 prose-measure lg:col-span-5">{t('home.servicesLede')}</p>
+          </div>
+          <ServiceGrid
+            services={[...services.values()].sort((a, b) => a.name.localeCompare(b.name)).map((s) => ({
+              slug: s.slug,
+              name: s.name,
+              summary: s.summary,
+              href: `/delhi/${s.slug}`,
+              statusTone: s.tier === 'C' ? 'neutral' : s.live.length ? 'success' : 'warning',
+              statusLabel: s.tier === 'C' ? t('home.comingLater') : s.live.length ? t('home.bookableIn', { cities: s.live.join(', ') }) : t('home.comingSoon'),
+              // No price is shown for Tier C: nothing has been priced yet.
+              priceLabel: s.tier !== 'C' && s.rate ? t('home.fromPrice', { price: formatInr(s.rate) }) : null,
+            }))}
+            other={{ title: t('home.otherTitle'), body: t('home.otherBody'), cta: t('home.otherCta'), href: '/request' }}
+          />
         </Container>
       </section>
 

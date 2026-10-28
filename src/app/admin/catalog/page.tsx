@@ -76,7 +76,11 @@ export default async function CatalogPage() {
                 </ActionForm>
               </div>
             ) : (
-              <p className="text-small text-ink-2 lg:col-span-8">{p.riskTier !== 'A' ? 'Gated category. Enabling needs the Milestone 6 safety review and sign-off.' : 'Admin role needed to edit.'}</p>
+              <p className="text-small text-ink-2 lg:col-span-8">{p.riskTier === 'B'
+                  ? 'Gated category. Enabling needs the Milestone 6 safety review and sign-off.'
+                  : p.riskTier === 'C'
+                    ? 'Tier C: needs licensed or specially checked workers. Enabling needs legal review, a priced offer and internal sign-off (decisions.md T-27).'
+                    : 'Admin role needed to edit.'}</p>
             )}
           </li>
         ))}

@@ -15,6 +15,11 @@ describe('migrations and database roles', () => {
         where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity
           and c.relname <> '__drizzle_migrations'`;
       expect(noRls.map((r) => r.relname)).toEqual([]);
+      // Helper functions are callable by the app role only, not by PUBLIC (0006_supabase_lockdown.sql).
+      const [fn] = await sql`
+        select has_function_privilege('saathi_app', 'app_worker_id()', 'execute') as app,
+               exists (select 1 from information_schema.role_routine_grants where routine_name = 'app_worker_id' and grantee = 'PUBLIC') as public_grant`;
+      expect(fn).toMatchObject({ app: true, public_grant: false });
     } finally {
       await sql.end();
     }

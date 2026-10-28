@@ -31,7 +31,10 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   };
   return {
     title: t('cityService.metaTitle', vars),
-    description: t('cityService.metaDescription', vars),
+    // Prices and booking rules are only promised where the service is live.
+    description: page.supply.live
+      ? t('cityService.metaDescription', vars)
+      : `${page.service.summary} ${t('cityService.metaNotLive', { city: page.city.name })}`,
     alternates: { canonical: `/${city}/${service}` },
     // Section 13 and 17: indexable only with live, bookable supply.
     // Staging and local are never indexable, whatever the supply.
@@ -102,22 +105,33 @@ export default async function CityServicePage({ params }: { params: Promise<Para
             <p className="mt-5 text-body-l text-ink-2 prose-measure">
               {page.service.slug === 'personal-driver' ? t('cityService.lede', vars) : page.service.summary}
             </p>
-            <h2 className="mt-10 font-display text-h3 font-semibold">{t('cityService.includedTitle')}</h2>
-            <ul className="mt-3">
-              {(['1', '2', '3'] as const).map((n) => (
-                <li key={n} className="border-b border-rule py-3">
-                  {t(`cityService.included${n}`)}
-                </li>
-              ))}
-            </ul>
-            <h2 className="mt-10 font-display text-h3 font-semibold">{t('cityService.rulesTitle')}</h2>
-            <ul className="mt-3 text-ink-2">
-              <li className="border-b border-rule py-3">
-                {t('cityService.rules1', { start: minutesToHhmm(cfg.allowedHours.startMinute), end: minutesToHhmm(cfg.allowedHours.endMinute) })}
-              </li>
-              <li className="border-b border-rule py-3">{t('cityService.rules2', { days: cfg.maxAdvanceDays })}</li>
-              <li className="border-b border-rule py-3">{t('cityService.rules3')}</li>
-            </ul>
+            {cfg.highlights.length > 0 && (
+              <>
+                <h2 className="mt-10 font-display text-h3 font-semibold">
+                  {page.supply.live ? t('cityService.includedTitle') : t('cityService.plannedTitle')}
+                </h2>
+                <ul className="mt-3">
+                  {cfg.highlights.map((h) => (
+                    <li key={h} className="border-b border-rule py-3">
+                      {h}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {/* Booking rules only make sense where the service can actually be booked. */}
+            {page.supply.live && (
+              <>
+                <h2 className="mt-10 font-display text-h3 font-semibold">{t('cityService.rulesTitle')}</h2>
+                <ul className="mt-3 text-ink-2">
+                  <li className="border-b border-rule py-3">
+                    {t('cityService.rules1', { start: minutesToHhmm(cfg.allowedHours.startMinute), end: minutesToHhmm(cfg.allowedHours.endMinute) })}
+                  </li>
+                  <li className="border-b border-rule py-3">{t('cityService.rules2', { days: cfg.maxAdvanceDays })}</li>
+                  <li className="border-b border-rule py-3">{t('cityService.rules3')}</li>
+                </ul>
+              </>
+            )}
           </div>
 
           <div className="lg:col-span-6">
@@ -186,10 +200,12 @@ export default async function CityServicePage({ params }: { params: Promise<Para
             ) : (
               <section aria-labelledby="soon-title" className="border border-rule-strong bg-surface p-6">
                 <h2 id="soon-title" className="font-display text-h3 font-semibold">
-                  {t('cityService.comingSoonTitle', { city: page.city.name })}
+                  {page.service.riskTier === 'C' ? t('cityService.laterTitle', { city: page.city.name }) : t('cityService.comingSoonTitle', { city: page.city.name })}
                 </h2>
                 <p className="mt-3 text-ink-2">
-                  {t('cityService.comingSoonBody', { serviceLower: page.service.name.toLowerCase(), city: page.city.name })}
+                  {page.service.riskTier === 'C'
+                    ? t('cityService.laterBody')
+                    : t('cityService.comingSoonBody', { serviceLower: page.service.name.toLowerCase(), city: page.city.name })}
                 </p>
                 <ActionForm action={joinWaitlistAction} errorTitle={t('common.errorTitle')} className="mt-6">
                   <input type="hidden" name="citySlug" value={city} />

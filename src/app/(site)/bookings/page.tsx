@@ -18,7 +18,7 @@ export default async function BookingsPage() {
     <Container className="pb-16">
       <PageHeading title={t('booking.listTitle')} />
       {rows.length === 0 ? (
-        <EmptyState title={t('booking.listEmpty')} body={t('home.lede')} action={<ButtonLink href="/delhi/personal-driver">{t('booking.listEmptyCta')}</ButtonLink>} />
+        <EmptyState title={t('booking.listEmpty')} body={t('home.lede')} action={<ButtonLink href="/#services">{t('booking.listEmptyCta')}</ButtonLink>} />
       ) : (
         <ul className="border-t border-ink">
           {rows.map((b) => (

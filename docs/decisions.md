@@ -87,7 +87,7 @@ None of these are legal conclusions. Each is built as configuration or as a capa
 | V-08 | Error monitoring (Sentry proposed) and uptime monitoring | Structured logs only | Open: vendor |
 | V-09 | Transactional email | Dev-log adapter | Open: vendor |
 | V-10 | Domain | `SITE_URL` environment variable; relative URLs elsewhere | Open |
-| V-11 | Supabase and Vercel access for staging | Not yet granted | Open: needs access |
+| V-11 | Supabase and Vercel access for staging | Supabase staging project `pitzttrxmzpprzbomvpj` set up on 28 Oct 2026: migrations 0000 to 0006 applied, restricted `saathi_app` user via the transaction pooler, Data API access revoked, private `worker-documents` bucket, staging seed loaded. Region is Tokyo (ap-northeast-1), accepted for testing only; each database round trip from India is about 200 ms. Vercel not connected yet | Open: production project must be created in Mumbai (ap-south-1); rotate the staging secret key and database password before any real data |
 
 ## 6. Decisions made while building Milestone 1
 
@@ -100,3 +100,16 @@ None of these are legal conclusions. Each is built as configuration or as a capa
 | T-20 | Booking start and end codes are stored twice: an HMAC hash for checking and an AES-256-GCM copy that only the customer's view decrypts | Decided | The customer must be able to see their codes; the worker must never receive them from the API. |
 | T-21 | Police certificates without a printed expiry are treated as valid for 12 months from issue | Pending sign-off | Config in `src/modules/workers/service.ts`; move to `config_values` in Milestone 3. |
 | T-22 | Staging and local pages are always noindex, even when supply is live | Decided | Prevents a staging host from being indexed. Production applies the section 13 rule. |
+| T-23 | Home page treats every service equally: the main call to action is "Book a person" and leads to the services section, not the driver page | Decided (owner request, 28 Oct 2026) | Saathi is multi-category; availability per service is shown on each card. |
+| T-24 | "What you can book" is a grid of photo cards (two fanned photos per service) instead of text rows | Decided (owner request, 28 Oct 2026) | Built on the existing design system (tokens, 2px radius) rather than adding shadcn/ui, which would bring a second styling system. Hover motion only on pointer devices and only when reduced motion is off. |
+| T-25 | Service photos are free Unsplash Licence images, hotlinked and resized by next/image | Decided | Credits in docs/image-credits.md. Replace with commissioned photography before launch marketing. |
+| T-26 | "Something else" requests are stored in an `enquiries` table and listed for ops; prohibited services are refused, ambiguous wording is marked for review | Decided | A first slice of assisted matching (Milestone 2) and CRM leads (M15). Status changes, owners, deadlines and quotes come in Milestone 2. |
+| T-27 | Elder care, domestic help and medical support at home are added as Tier C services: configured with their extra documents and checks, shown on the site as "Coming later" with a waitlist, never bookable and never indexed | Decided (owner request, 28 Oct 2026); enabling is Pending sign-off | Brief section 4 puts in-home domestic help and nursing or medical care in Tier C, and section 20 requires asking before enabling Tier C. `isOfferable()` refuses Tier C regardless of city status or flags, so turning them on needs a deliberate code and config change after L-11 to L-13 are confirmed. Prices are not set (shown as ₹0 in the admin catalogue, hidden on the site). |
+
+## 7. Legal items added for Tier C (none of these are legal conclusions)
+
+| ID | Item | What is built | Status |
+|---|---|---|---|
+| L-11 | Domestic help: whether state rules for agencies that place domestic workers (for example in Delhi) or domestic worker welfare schemes apply to Saathi, and what registration or contracts they need | Service configured, not bookable; police verification and customer ID required | Needs legal/CA confirmation |
+| L-12 | Medical support at home: how to verify registration with a State Nursing Council, whether home nursing needs registration under health establishment rules, liability and insurance, and what tasks nurses may do at home | Requires `nursing_registration` and `medical_qualification` documents; copy says "not for emergencies, call 112" | Needs legal/CA confirmation |
+| L-13 | Elder care at home: scope limits for non-medical caregivers, training standards to accept, consent when the person cared for is not the customer, and safeguarding duties | Requires `caregiver_training` and `first_aid_certificate`; copy says non-medical | Needs legal/CA confirmation |

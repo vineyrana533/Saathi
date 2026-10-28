@@ -11,6 +11,11 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   typedRoutes: false,
   serverExternalPackages: ['postgres'],
+  images: {
+    // Licensed Unsplash photos (docs/image-credits.md), resized and served as AVIF/WebP by next/image.
+    remotePatterns: [{ protocol: 'https', hostname: 'images.unsplash.com', pathname: '/photo-*' }],
+    formats: ['image/avif', 'image/webp'],
+  },
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }];
   },

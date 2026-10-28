@@ -20,7 +20,9 @@ export async function getCityServicePage(citySlug: string, serviceSlug: string) 
   const ctx = anonymousCtx();
   return withDb(ctx, async (tx) => {
     const s = await loadServiceInCity(tx, serviceSlug, citySlug);
-    if (!s || s.service.riskTier === 'C') return null;
+    // Tier C pages exist only as "coming later" waitlist pages: isOfferable() is always false for
+    // Tier C, so they are never live, never indexable and never bookable.
+    if (!s) return null;
     // Tier B pages do not exist publicly until the category is enabled.
     if (s.service.riskTier === 'B' && !s.flagEnabled) return null;
     const supply: SupplyStatus = await supplyStatus(tx, ctx, s);

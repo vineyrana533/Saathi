@@ -16,7 +16,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     ['/admin/bookings', 'Bookings'],
     ['/admin/catalog', 'Services and prices'],
     ['/admin/moderation', 'Moderation'],
-    ['/admin/waitlist', 'Waitlist'],
+    ['/admin/waitlist', 'Waitlist and requests'],
   ];
   return (
     <div className="min-h-dvh bg-paper">

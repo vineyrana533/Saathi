@@ -37,7 +37,7 @@ export default function HowItWorksPage() {
       <section aria-labelledby="cancel-title" className="mt-section max-w-3xl">
         <SectionTitle id="cancel-title">{t('home.faqCancelQ')}</SectionTitle>
         <p className="mt-4 text-body-l text-ink-2">{t('home.faqCancelA')}</p>
-        <ButtonLink href="/delhi/personal-driver" className="mt-8">
+        <ButtonLink href="/#services" className="mt-8">
           {t('home.ctaPrimary')}
         </ButtonLink>
       </section>

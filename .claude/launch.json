@@ -6,6 +6,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["dev"],
       "port": 3000
+    },
+    {
+      "name": "saathi-staging-db",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["--env-file=.env.staging.local", "node_modules/next/dist/bin/next", "start", "-p", "3001"],
+      "port": 3001
     }
   ]
 }

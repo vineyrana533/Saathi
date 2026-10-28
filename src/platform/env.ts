@@ -18,6 +18,10 @@ const schema = z.object({
     .refine((v) => Buffer.from(v, 'base64').length === 32, 'DOCUMENT_ENCRYPTION_KEY must be 32 bytes, base64'),
   DOCUMENT_STORE: z.enum(['local-encrypted', 'supabase']).default('local-encrypted'),
   LOCAL_DOCUMENT_DIR: z.string().default('.local/documents'),
+  // Supabase Storage (server-only). The secret key must never get a NEXT_PUBLIC_ prefix.
+  SUPABASE_URL: z.string().url().optional(),
+  SUPABASE_SECRET_KEY: z.string().min(20).optional(),
+  SUPABASE_DOCUMENTS_BUCKET: z.string().regex(/^[a-z0-9-]+$/).default('worker-documents'),
   PAYMENTS_MODE: z.enum(['sandbox', 'live']).default('sandbox'),
   PAYMENTS_LIVE_APPROVED: z.enum(['true', 'false']).default('false'),
   SANDBOX_WEBHOOK_SECRET: z.string().min(8).default('local-sandbox-webhook-secret'),

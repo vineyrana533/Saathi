@@ -10,7 +10,7 @@ import {
 } from './schema';
 import { userRoles, users } from '../identity/schema';
 import { services } from '../catalog/schema';
-import { serviceConfigSchema } from '../catalog/config';
+import { DOCUMENT_TYPES, serviceConfigSchema } from '../catalog/config';
 import { zones, cities } from '../geo/schema';
 import { scanText, explainBlock } from '../chat/moderation';
 import { moderationFlags } from '../chat/schema';
@@ -115,7 +115,7 @@ export async function saveWorkerProfile(ctx: Ctx, raw: WorkerProfileInput) {
 
 export const documentInput = z
   .object({
-    docType: z.enum(['driving_licence', 'police_certificate', 'id_proof', 'selfie', 'profile_photo']),
+    docType: z.enum(DOCUMENT_TYPES),
     numberLast4: z.string().regex(/^[A-Za-z0-9]{4}$/, 'Enter the last 4 characters only').optional(),
     idType: z.enum(['aadhaar', 'pan', 'voter_id', 'passport', 'driving_licence']).optional(),
     issuedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),

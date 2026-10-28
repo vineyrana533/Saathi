@@ -9,3 +9,4 @@ export * from '../../modules/payments/schema';
 export * from '../../modules/chat/schema';
 export * from '../../modules/reviews/schema';
 export * from '../../modules/seo/schema';
+export * from '../../modules/requests/schema';

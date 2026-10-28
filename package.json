@@ -20,7 +20,8 @@
     "db:local": "tsx scripts/local-db.ts",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
-    "jobs:run": "tsx scripts/run-jobs.ts"
+    "jobs:run": "tsx scripts/run-jobs.ts",
+    "storage:setup": "tsx scripts/setup-storage.ts"
   },
   "dependencies": {
     "drizzle-orm": "0.45.4",

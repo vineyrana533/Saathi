@@ -49,6 +49,11 @@ export const PERSONAL_DRIVER_CONFIG: ServiceConfig = serviceConfigSchema.parse({
   cancellationPolicy: standardCancellation,
   payment: 'prepay',
   safety: { startOtp: true, endOtp: true, checkInIntervalMinutes: null, sos: true, publicVenueOnly: false },
+  highlights: [
+    'A driver for your car, for the hours you book. Fuel, parking and tolls are yours to pay.',
+    'Start and end codes, so the clock only runs while the driver is with you.',
+    'Chat with your driver inside Saathi.',
+  ],
 });
 
 const EVENT_STAFF_CONFIG: ServiceConfig = serviceConfigSchema.parse({
@@ -70,6 +75,11 @@ const EVENT_STAFF_CONFIG: ServiceConfig = serviceConfigSchema.parse({
   cancellationPolicy: standardCancellation,
   payment: 'prepay',
   safety: { startOtp: true, endOtp: true, checkInIntervalMinutes: null, sos: true, publicVenueOnly: false },
+  highlights: [
+    'Hosts, ushers, registration desk staff and helpers, from one person to a full team.',
+    'Our team confirms numbers, timings and dress code with you before the day.',
+    'Start and end codes for every person on the job.',
+  ],
 });
 
 const ERRANDS_CONFIG: ServiceConfig = serviceConfigSchema.parse({
@@ -91,6 +101,11 @@ const ERRANDS_CONFIG: ServiceConfig = serviceConfigSchema.parse({
   cancellationPolicy: standardCancellation,
   payment: 'prepay',
   safety: { startOtp: true, endOtp: true, checkInIntervalMinutes: null, sos: true, publicVenueOnly: false },
+  highlights: [
+    'Standing in a queue, document runs and shopping help.',
+    'Company at appointments, with non-medical help only.',
+    'Start and end codes, so you pay only for the time booked.',
+  ],
 });
 
 /** Tier B: built and configured, disabled behind a feature flag until the safety review (Milestone 6). */
@@ -112,6 +127,98 @@ const COMPANION_CONFIG: ServiceConfig = serviceConfigSchema.parse({
   safety: { startOtp: true, endOtp: true, checkInIntervalMinutes: 30, sos: true, publicVenueOnly: true },
 });
 
+/**
+ * Tier C: in-home and medical work. Configured with the extra documents and checks they need,
+ * but never bookable until licences, legal review and internal sign-off are done (decisions.md T-27).
+ * Every Tier C service requires a verified customer ID, police verification and KYC.
+ */
+const ELDER_CARE_CONFIG: ServiceConfig = serviceConfigSchema.parse({
+  durationMinutes: { min: 240, max: 720, step: 60 },
+  leadTimeMinutes: 24 * 60,
+  maxAdvanceDays: 60,
+  allowedHours: { startMinute: 7 * 60, endMinute: 21 * 60 },
+  workersRequired: { min: 1, max: 1 },
+  location: { mode: 'customer_address', travelRadiusKm: 15, outstationAllowed: false },
+  questions: [
+    { id: 'care_need', label: 'What help is needed?', type: 'select', required: true, options: [
+      { value: 'company', label: 'Company and conversation' }, { value: 'routines', label: 'Help with daily routines' },
+      { value: 'mobility', label: 'Help moving around the home' }] },
+    { id: 'notes', label: 'Anything the caregiver should know?', help: 'Routines, mobility, languages. No medical instructions.', type: 'text', required: false, maxLength: 300 },
+  ],
+  workerRequirements: {
+    documents: [{ type: 'caregiver_training' }, { type: 'first_aid_certificate' }],
+    requirePoliceVerification: true,
+    requireKyc: true,
+    minRating: { value: 4, afterCount: 3 },
+  },
+  customerVerification: 'id',
+  matching: 'manual',
+  cancellationPolicy: standardCancellation,
+  payment: 'prepay',
+  safety: { startOtp: true, endOtp: true, checkInIntervalMinutes: 120, sos: true, publicVenueOnly: false },
+  highlights: [
+    'Company and help with daily routines for an older family member at home.',
+    'Help moving around the home safely. No medical tasks.',
+    'Caregivers with training and first aid certificates, and police verification.',
+  ],
+});
+
+const DOMESTIC_HELP_CONFIG: ServiceConfig = serviceConfigSchema.parse({
+  durationMinutes: { min: 120, max: 480, step: 60 },
+  leadTimeMinutes: 24 * 60,
+  maxAdvanceDays: 60,
+  allowedHours: { startMinute: 7 * 60, endMinute: 20 * 60 },
+  workersRequired: { min: 1, max: 3 },
+  location: { mode: 'customer_address', travelRadiusKm: 15, outstationAllowed: false },
+  questions: [
+    { id: 'task', label: 'What needs doing?', type: 'select', required: true, options: [
+      { value: 'cleaning', label: 'Cleaning' }, { value: 'cooking', label: 'Cooking' },
+      { value: 'laundry', label: 'Laundry and ironing' }, { value: 'mixed', label: 'A mix of these' }] },
+    { id: 'notes', label: 'Anything else?', type: 'text', required: false, maxLength: 300 },
+  ],
+  workerRequirements: { documents: [], requirePoliceVerification: true, requireKyc: true, minRating: { value: 4, afterCount: 3 } },
+  customerVerification: 'id',
+  matching: 'manual',
+  cancellationPolicy: standardCancellation,
+  payment: 'prepay',
+  safety: { startOtp: true, endOtp: true, checkInIntervalMinutes: null, sos: true, publicVenueOnly: false },
+  highlights: [
+    'Cleaning, cooking, laundry and dishes in your home.',
+    'Book by the hour, or ask for a regular schedule.',
+    'Every person is police-verified before their first job.',
+  ],
+});
+
+const MEDICAL_SUPPORT_CONFIG: ServiceConfig = serviceConfigSchema.parse({
+  durationMinutes: { min: 240, max: 720, step: 60 },
+  leadTimeMinutes: 24 * 60,
+  maxAdvanceDays: 60,
+  allowedHours: { startMinute: 7 * 60, endMinute: 21 * 60 },
+  workersRequired: { min: 1, max: 1 },
+  location: { mode: 'customer_address', travelRadiusKm: 15, outstationAllowed: false },
+  questions: [
+    { id: 'support_need', label: 'What support is needed?', type: 'select', required: true, options: [
+      { value: 'medicines', label: 'Help with medicines' }, { value: 'dressings', label: 'Wound dressings' },
+      { value: 'recovery', label: 'Recovery after a hospital stay' }, { value: 'other', label: 'Something else (our team will call)' }] },
+  ],
+  workerRequirements: {
+    documents: [{ type: 'nursing_registration' }, { type: 'medical_qualification' }],
+    requirePoliceVerification: true,
+    requireKyc: true,
+    minRating: { value: 4, afterCount: 3 },
+  },
+  customerVerification: 'id',
+  matching: 'manual',
+  cancellationPolicy: standardCancellation,
+  payment: 'prepay',
+  safety: { startOtp: true, endOtp: true, checkInIntervalMinutes: 120, sos: true, publicVenueOnly: false },
+  highlights: [
+    'Care from registered nurses only, with their registration checked.',
+    'Help with medicines, dressings and recovery after a hospital stay.',
+    'Not for emergencies. In an emergency, call 112.',
+  ],
+});
+
 export const DRIVER_PRICING: PricingConfig = pricingConfigSchema.parse({
   currency: 'INR',
   model: 'hourly',
@@ -124,12 +231,22 @@ export const DRIVER_PRICING: PricingConfig = pricingConfigSchema.parse({
 
 const HOURLY_PLACEHOLDER = (ratePaise: number): PricingConfig => ({ ...DRIVER_PRICING, hourlyRatePaise: ratePaise });
 
+const TIER_C_CITIES = { delhi: 'waitlist', noida: 'waitlist', gurugram: 'waitlist', mumbai: 'waitlist' } as const;
+
+const FLAG_SEED = [
+  { key: 'category.social-companion', description: 'Tier B social companion category. Enable only after the Milestone 6 safety review and sign-off.' },
+  { key: 'category.elder-care', description: 'Tier C elder care at home. Enable only after licences, legal review and internal sign-off (decisions.md T-27).' },
+  { key: 'category.domestic-help', description: 'Tier C domestic help. Enable only after legal review and internal sign-off (decisions.md T-27).' },
+  { key: 'category.medical-support', description: 'Tier C home nursing. Enable only after licences, legal review and internal sign-off (decisions.md T-27).' },
+];
+
 const CATEGORY_SEED = [
   { slug: 'driving', name: 'Driving', riskTier: 'A', sortOrder: 1 },
   { slug: 'event-staff', name: 'Event and business staff', riskTier: 'A', sortOrder: 2 },
   { slug: 'errands', name: 'Errands and appointment help', riskTier: 'A', sortOrder: 3 },
   { slug: 'social-companion', name: 'Social companion (platonic)', riskTier: 'B', sortOrder: 4 },
-  { slug: 'care', name: 'Care services (licensed, later)', riskTier: 'C', sortOrder: 5 },
+  { slug: 'care', name: 'Care at home (licensed, later)', riskTier: 'C', sortOrder: 5 },
+  { slug: 'home-help', name: 'Help at home (later)', riskTier: 'C', sortOrder: 6 },
 ] as const;
 
 const SERVICE_SEED = [
@@ -149,6 +266,18 @@ const SERVICE_SEED = [
     summary: 'Platonic company in public places only. Not available yet.', config: COMPANION_CONFIG,
     status: 'disabled', featureFlagKey: 'category.social-companion', pricing: HOURLY_PLACEHOLDER(30000),
     cityStatus: { delhi: 'waitlist' } },
+  { slug: 'elder-care', category: 'care', name: 'Elder care', riskTier: 'C', bookingMode: 'assisted',
+    summary: 'A trained caregiver for an older family member at home: company, daily routines and moving around safely. Non-medical.',
+    config: ELDER_CARE_CONFIG, status: 'disabled', featureFlagKey: 'category.elder-care', pricing: HOURLY_PLACEHOLDER(0),
+    cityStatus: TIER_C_CITIES },
+  { slug: 'domestic-help', category: 'home-help', name: 'Domestic help', riskTier: 'C', bookingMode: 'assisted',
+    summary: 'Help at home with cleaning, cooking, laundry and dishes, by the hour or on a regular schedule.',
+    config: DOMESTIC_HELP_CONFIG, status: 'disabled', featureFlagKey: 'category.domestic-help', pricing: HOURLY_PLACEHOLDER(0),
+    cityStatus: TIER_C_CITIES },
+  { slug: 'medical-support', category: 'care', name: 'Medical support at home', riskTier: 'C', bookingMode: 'assisted',
+    summary: 'Home nursing by registered nurses: help with medicines, dressings and recovery after a hospital stay.',
+    config: MEDICAL_SUPPORT_CONFIG, status: 'disabled', featureFlagKey: 'category.medical-support', pricing: HOURLY_PLACEHOLDER(0),
+    cityStatus: TIER_C_CITIES },
 ] as const;
 
 export async function seedCatalog(tx: Tx) {
@@ -162,20 +291,18 @@ export async function seedCatalog(tx: Tx) {
   for (const cat of CATEGORY_SEED) {
     await tx.insert(serviceCategories).values(cat).onConflictDoNothing();
   }
-  await tx
-    .insert(featureFlags)
-    .values({ key: 'category.social-companion', enabled: false, description: 'Tier B social companion category. Enable only after the Milestone 6 safety review and sign-off.' })
-    .onConflictDoNothing();
+  for (const flag of FLAG_SEED) {
+    await tx.insert(featureFlags).values({ ...flag, enabled: false }).onConflictDoNothing();
+  }
 
   for (const s of SERVICE_SEED) {
     const [cat] = await tx.select().from(serviceCategories).where(eq(serviceCategories.slug, s.category));
+    // Reference content is refreshed on every seed; status is left alone once set (admins may change it).
+    const content = { categoryId: cat!.id, name: s.name, summary: s.summary, riskTier: s.riskTier, bookingMode: s.bookingMode, config: s.config, featureFlagKey: s.featureFlagKey };
     await tx
       .insert(services)
-      .values({
-        categoryId: cat!.id, slug: s.slug, name: s.name, summary: s.summary, riskTier: s.riskTier,
-        bookingMode: s.bookingMode, pricingModel: 'hourly', config: s.config, featureFlagKey: s.featureFlagKey, status: s.status,
-      })
-      .onConflictDoNothing();
+      .values({ ...content, slug: s.slug, pricingModel: 'hourly', status: s.status })
+      .onConflictDoUpdate({ target: services.slug, set: content });
     const [svc] = await tx.select().from(services).where(eq(services.slug, s.slug));
     for (const [citySlug, status] of Object.entries(s.cityStatus)) {
       const [city] = await tx.select().from(cities).where(eq(cities.slug, citySlug));
