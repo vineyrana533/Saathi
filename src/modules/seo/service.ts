@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { waitlistEntries } from './schema';
 import { serviceCities, services } from '../catalog/schema';
@@ -9,7 +9,8 @@ import { anonymousCtx, withDb, type Ctx } from '@/platform/db/client';
 import { normaliseIndianMobile } from '@/platform/auth/phone';
 import { enforceRateLimit, LIMITS } from '@/platform/rate-limit';
 import { requirePermission } from '@/platform/auth/permissions';
-import { notFound } from '@/platform/errors';
+import { invalid, notFound } from '@/platform/errors';
+import { audit } from '@/platform/audit';
 import { sql } from 'drizzle-orm';
 
 /**
@@ -93,4 +94,55 @@ export async function waitlistDemand(ctx: Ctx) {
       from waitlist_entries w join cities c on c.id = w.city_id join services s on s.id = w.service_id
       group by c.name, s.name order by entries desc`),
   );
+}
+
+const FOLLOW_UP = ['new', 'contacted', 'closed'] as const;
+export type FollowUpStatus = (typeof FOLLOW_UP)[number];
+
+/** Individual waitlist sign-ups with contact details, for ops to call back. Newest first. */
+export async function listWaitlistEntries(ctx: Ctx, opts: { status?: string; page?: number } = {}) {
+  requirePermission(ctx, 'waitlist.read');
+  const page = Math.max(1, opts.page ?? 1);
+  const status = FOLLOW_UP.find((s) => s === opts.status);
+  return withDb(ctx, async (tx) => {
+    const rows = await tx
+      .select({
+        id: waitlistEntries.id,
+        name: waitlistEntries.name,
+        phoneE164: waitlistEntries.phoneE164,
+        need: waitlistEntries.need,
+        wantedOn: waitlistEntries.wantedOn,
+        status: waitlistEntries.status,
+        contactedAt: waitlistEntries.contactedAt,
+        createdAt: waitlistEntries.createdAt,
+        city: cities.name,
+        service: services.name,
+      })
+      .from(waitlistEntries)
+      .innerJoin(cities, eq(cities.id, waitlistEntries.cityId))
+      .innerJoin(services, eq(services.id, waitlistEntries.serviceId))
+      .where(status ? eq(waitlistEntries.status, status) : undefined)
+      .orderBy(desc(waitlistEntries.createdAt))
+      .limit(51)
+      .offset((page - 1) * 50);
+    return { rows: rows.slice(0, 50), hasNext: rows.length > 50, page };
+  });
+}
+
+export async function setWaitlistStatus(ctx: Ctx, input: { id: string; status: FollowUpStatus }) {
+  requirePermission(ctx, 'waitlist.manage');
+  if (!FOLLOW_UP.includes(input.status)) throw invalid('invalid_status', 'Unknown status');
+  return withDb(ctx, async (tx) => {
+    const [row] = await tx
+      .update(waitlistEntries)
+      .set({
+        status: input.status,
+        contactedAt: input.status === 'new' ? null : sql`coalesce(${waitlistEntries.contactedAt}, now())`,
+        contactedBy: input.status === 'new' ? null : ctx.userId,
+      })
+      .where(eq(waitlistEntries.id, input.id))
+      .returning({ id: waitlistEntries.id });
+    if (!row) throw notFound('Waitlist entry');
+    await audit(tx, ctx, 'waitlist.status_changed', 'waitlist_entry', input.id, { status: input.status });
+  });
 }

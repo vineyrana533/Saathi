@@ -21,6 +21,8 @@ export const enquiries = pgTable(
     source: text('source').notNull().default('web'),
     status: text('status').notNull().default('new'),
     reviewReasons: text('review_reasons').array().notNull().default(sql`'{}'::text[]`),
+    contactedAt: timestamp('contacted_at', { withTimezone: true }),
+    contactedBy: uuid('contacted_by'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

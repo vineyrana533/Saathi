@@ -4,6 +4,8 @@ import { revalidatePath } from 'next/cache';
 import { activateWorker, reviewDocument, reviewServiceApplication } from '@/modules/workers/service';
 import { setServiceCityStatus, updateServiceCityPricing } from '@/modules/catalog/service';
 import { pricingConfigSchema } from '@/modules/catalog/config';
+import { setWaitlistStatus, type FollowUpStatus } from '@/modules/seo/service';
+import { setEnquiryStatus } from '@/modules/requests/service';
 import { runAction, str } from '../_lib/actions';
 import { pageSession } from '../_lib/session';
 import { invalid } from '@/platform/errors';
@@ -66,5 +68,23 @@ export async function setStatusAction(_: ActionState, fd: FormData): Promise<Act
     return 'Status updated.';
   });
   revalidatePath('/admin/catalog');
+  return state;
+}
+
+export async function setWaitlistStatusAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  const state = await runAction(async () => {
+    const { ctx } = await pageSession();
+    await setWaitlistStatus(ctx, { id: str(fd, 'id'), status: str(fd, 'status') as FollowUpStatus });
+  });
+  revalidatePath('/admin/waitlist');
+  return state;
+}
+
+export async function setEnquiryStatusAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  const state = await runAction(async () => {
+    const { ctx } = await pageSession();
+    await setEnquiryStatus(ctx, { id: str(fd, 'id'), status: str(fd, 'status') as FollowUpStatus });
+  });
+  revalidatePath('/admin/waitlist');
   return state;
 }

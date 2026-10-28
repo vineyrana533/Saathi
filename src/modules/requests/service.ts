@@ -1,4 +1,4 @@
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { enquiries } from './schema';
 import { cities } from '../geo/schema';
@@ -7,7 +7,8 @@ import { anonymousCtx, withDb, type Ctx } from '@/platform/db/client';
 import { normaliseIndianMobile } from '@/platform/auth/phone';
 import { enforceRateLimit, LIMITS } from '@/platform/rate-limit';
 import { requirePermission } from '@/platform/auth/permissions';
-import { invalid } from '@/platform/errors';
+import { invalid, notFound } from '@/platform/errors';
+import { audit } from '@/platform/audit';
 import { todayIst } from '@/platform/time';
 
 export const enquiryInput = z.object({
@@ -66,4 +67,22 @@ export async function listEnquiries(ctx: Ctx) {
       .orderBy(desc(enquiries.createdAt))
       .limit(100),
   );
+}
+
+export async function setEnquiryStatus(ctx: Ctx, input: { id: string; status: 'new' | 'contacted' | 'closed' }) {
+  requirePermission(ctx, 'waitlist.manage');
+  if (!['new', 'contacted', 'closed'].includes(input.status)) throw invalid('invalid_status', 'Unknown status');
+  return withDb(ctx, async (tx) => {
+    const [row] = await tx
+      .update(enquiries)
+      .set({
+        status: input.status,
+        contactedAt: input.status === 'new' ? null : sql`coalesce(${enquiries.contactedAt}, now())`,
+        contactedBy: input.status === 'new' ? null : ctx.userId,
+      })
+      .where(eq(enquiries.id, input.id))
+      .returning({ id: enquiries.id });
+    if (!row) throw notFound('Request');
+    await audit(tx, ctx, 'enquiry.status_changed', 'enquiry', input.id, { status: input.status });
+  });
 }

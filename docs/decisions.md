@@ -113,3 +113,11 @@ None of these are legal conclusions. Each is built as configuration or as a capa
 | L-11 | Domestic help: whether state rules for agencies that place domestic workers (for example in Delhi) or domestic worker welfare schemes apply to Saathi, and what registration or contracts they need | Service configured, not bookable; police verification and customer ID required | Needs legal/CA confirmation |
 | L-12 | Medical support at home: how to verify registration with a State Nursing Council, whether home nursing needs registration under health establishment rules, liability and insurance, and what tasks nurses may do at home | Requires `nursing_registration` and `medical_qualification` documents; copy says "not for emergencies, call 112" | Needs legal/CA confirmation |
 | L-13 | Elder care at home: scope limits for non-medical caregivers, training standards to accept, consent when the person cared for is not the customer, and safeguarding duties | Requires `caregiver_training` and `first_aid_certificate`; copy says non-medical | Needs legal/CA confirmation |
+
+## 8. Staging hosting decisions (28 Oct 2026)
+
+| ID | Decision | Status | Reason and notes |
+|---|---|---|---|
+| T-28 | The cron runs once a day (02:30 UTC, 08:00 IST) | Decided for Hobby plan | Vercel Hobby only allows daily cron jobs. Nothing depends on the cron for correctness: stale payment holds are cleared inside the booking transaction, and eligibility checks document expiry dates directly. Switch to every minute (`* * * * *`) on Vercel Pro, before real SMS notifications go out. |
+| T-29 | Function region is set per Vercel project, not in `vercel.json` | Decided | Staging functions run in Tokyo (`hnd1`), next to the staging database. Production must use Mumbai (`bom1`) with a Mumbai Supabase project. Each page makes several database round trips, so functions must sit next to the database. |
+| T-30 | The staging site is behind a shared password (HTTP Basic auth) when `STAGING_ACCESS_PASSWORD` is set | Decided | Staging test accounts use a known login code, including an admin account. Cron, payment webhooks and the health check are exempt because they carry their own secrets. Never set this variable in production. |
