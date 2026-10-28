@@ -87,7 +87,7 @@ None of these are legal conclusions. Each is built as configuration or as a capa
 | V-08 | Error monitoring (Sentry proposed) and uptime monitoring | Structured logs only | Open: vendor |
 | V-09 | Transactional email | Dev-log adapter | Open: vendor |
 | V-10 | Domain | `SITE_URL` environment variable; relative URLs elsewhere | Open |
-| V-11 | Supabase and Vercel access for staging | Supabase staging project `pitzttrxmzpprzbomvpj` set up on 28 Oct 2026: migrations 0000 to 0006 applied, restricted `saathi_app` user via the transaction pooler, Data API access revoked, private `worker-documents` bucket, staging seed loaded. Region is Tokyo (ap-northeast-1), accepted for testing only; each database round trip from India is about 200 ms. Vercel not connected yet | Open: production project must be created in Mumbai (ap-south-1); rotate the staging secret key and database password before any real data |
+| V-11 | Supabase and Vercel access for staging | Done 28 Oct 2026. Supabase staging project `pitzttrxmzpprzbomvpj` (Tokyo): migrations 0000 to 0007, restricted `saathi_app` user via the pooler, Data API access revoked, private `worker-documents` bucket, staging seed. Vercel project `saathi` (vineyrana533-1319, Hobby): functions in Tokyo, auto-deploy from GitHub `main`, behind the staging password, live at https://saathi-three-chi.vercel.app and verified with a full booking | Open for production: Mumbai Supabase and Vercel projects, paid plans, fresh secrets. Rotate the staging Supabase key, database password and Vercel token, which were shared in chat |
 
 ## 6. Decisions made while building Milestone 1
 

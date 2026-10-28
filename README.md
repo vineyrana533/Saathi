@@ -5,8 +5,8 @@ Saathi (working name) is a marketplace for hiring a verified person for a specif
 ## Status
 
 - **Milestone 0 (foundations)** and **Milestone 1 (personal driver, Delhi NCR, direct booking)** are built and run locally against real PostgreSQL 17.
-- Nothing is deployed. Staging needs Supabase and Vercel access (see "Deploying to staging").
-- Every external vendor runs in a sandbox or development mode, and the site says so on every page: payments (sandbox gateway, no real money), SMS (written to the server log), KYC (manual review by the verification team), document storage (encrypted local files).
+- Staging is live, password protected, at https://saathi-three-chi.vercel.app (see "Staging"). Production is not set up.
+- Every external vendor runs in a sandbox or development mode, and the site says so on every page: payments (sandbox gateway, no real money), SMS (written to the server log), KYC (manual review by the verification team), document storage (encrypted, local files on your machine and Supabase Storage on staging).
 - Real customers must not use this until the public launch gate in [docs/security-privacy-and-safety.md](docs/security-privacy-and-safety.md) is met and payment gateway approval is recorded ([docs/gateway-approval-request.md](docs/gateway-approval-request.md)).
 - Progress per module: [docs/module-status.md](docs/module-status.md).
 
@@ -94,25 +94,30 @@ docs/               Specifications, decisions and tracker
 - Quality: [testing-strategy](docs/testing-strategy.md), [seo-plan](docs/seo-plan.md)
 - Decisions and open questions: [decisions](docs/decisions.md)
 
-## Deploying to staging
+## Staging
 
-None of these steps has been done. They need access to the Supabase and Vercel accounts.
+Staging is live at **https://saathi-three-chi.vercel.app** (Vercel project `saathi` under vineyrana533-1319, Hobby plan). It is behind a shared password: any username, password in `STAGING_ACCESS_PASSWORD` in `.env.staging.local`. Search engines are blocked.
 
-1. Create a Supabase project in `ap-south-1` (Mumbai). Note the direct connection URL (owner) and the transaction pooler URL.
-2. Run migrations as the owner:
+| Piece | Where | Notes |
+|---|---|---|
+| App | Vercel, functions in Tokyo (`hnd1`) | Deploys automatically on every push to `main` |
+| Database | Supabase `pitzttrxmzpprzbomvpj`, Tokyo | Reached through the pooler (IPv4). App uses the restricted `saathi_app` user |
+| Documents | Supabase Storage, private bucket `worker-documents` | Encrypted by the app before upload |
+| Cron | Vercel Cron, daily | Hobby plan limit; see decisions T-28 |
 
-   ```bash
-   DATABASE_URL_OWNER="<direct connection url>" pnpm db:migrate
-   ```
+All staging settings live in `.env.staging.local` on the operator's machine (git-ignored). Operator commands:
 
-3. In the Supabase SQL editor, give the application role a strong password (the migration creates the role without login):
+```bash
+pnpm tsx --env-file=.env.staging.local scripts/migrate.ts        # apply new migrations to staging
+pnpm tsx --env-file=.env.staging.local scripts/seed.ts           # reference data, test accounts, sample drivers
+pnpm tsx --env-file=.env.staging.local scripts/setup-storage.ts  # create and check the documents bucket
+node scripts/vercel-staging.mjs env                              # copy runtime settings to Vercel
+node scripts/vercel-staging.mjs deploy                           # redeploy from GitHub main
+```
 
-   ```sql
-   ALTER ROLE saathi_app LOGIN PASSWORD '<generated password>';
-   ```
+Run migrations **before** pushing code that needs them, because a push deploys immediately.
 
-4. Create the Vercel project with function region `bom1`. Set every variable from `.env.example`: `APP_ENV=staging`, `SITE_URL`, `DATABASE_URL` (pooler URL with the `saathi_app` user), `DATABASE_URL_OWNER` (only where migrations run), and freshly generated `OTP_PEPPER`, `DOCUMENT_ENCRYPTION_KEY` (32 bytes, base64), `SANDBOX_WEBHOOK_SECRET` and `CRON_SECRET`. Keep `PAYMENTS_MODE=sandbox` and `PAYMENTS_LIVE_APPROVED=false`.
-5. Document storage: until the Supabase Storage adapter is written, keep `DOCUMENT_STORE=local-encrypted`, which does not persist on Vercel. Uploads will not survive between function runs, so document upload on staging needs the storage adapter first.
-6. Add a Vercel Cron job (a `vercel.json` `crons` entry, not in the repo yet) calling `/api/cron/run`. Vercel sends `Authorization: Bearer <CRON_SECRET>`. Per-minute schedules need a paid Vercel plan; check the plan's cron limits. With a slower schedule, stale payment holds are still cleared whenever someone tries to book the same worker.
-7. Seed staging with `pnpm db:seed` pointed at the staging database if you want test accounts. Do not seed production.
-8. Check `/api/health`, then walk through a booking with the test accounts.
+### Production (not set up)
+
+Production needs its own Supabase project in **Mumbai (ap-south-1)**, a Vercel project with functions in Mumbai (`bom1`), paid plans, fresh secrets, no `STAGING_ACCESS_PASSWORD`, no seed data, and the launch gate in [docs/security-privacy-and-safety.md](docs/security-privacy-and-safety.md).
+
