@@ -2,6 +2,11 @@ import { notFound } from 'next/navigation';
 import { getBookingForViewer } from '@/modules/bookings/service';
 import { listChatMessages } from '@/modules/chat/service';
 import { bookingLedgerForStaff } from '@/modules/ops/queries';
+import { teamSuggestions } from '@/modules/bookings/team';
+import { can } from '@/platform/auth/permissions';
+import { ActionForm, SubmitButton } from '@/ui/action-form';
+import { Input } from '@/ui/primitives';
+import { assignWorkerAction, releaseWorkerAction } from '../../actions';
 import { formatInr } from '@/modules/pricing/engine';
 import { formatIst } from '@/platform/time';
 import { isAppError } from '@/platform/errors';
@@ -21,6 +26,8 @@ export default async function AdminBookingDetail({ params }: { params: Promise<{
     throw e;
   }
   const [ledger, messages] = await Promise.all([bookingLedgerForStaff(ctx, id), listChatMessages(ctx, id).catch(() => [])]);
+  const teamOpen = can(ctx, 'booking.assign') && ['pending_payment', 'confirmed'].includes(b.status);
+  const suggestions = teamOpen && b.workers.length < b.workersNeeded ? await teamSuggestions(ctx, id) : [];
   return (
     <>
       <div className="flex flex-wrap items-center gap-3">
@@ -35,7 +42,7 @@ export default async function AdminBookingDetail({ params }: { params: Promise<{
           <dl className="border-t border-ink">
             {[
               ['Customer', b.customerName ?? 'Unnamed'],
-              ['Worker', b.worker?.name ?? 'None'],
+              ['People', `${b.workers.length} of ${b.workersNeeded}${b.workers.length ? `: ${b.workers.map((w) => w.name).join(', ')}` : ''}`],
               ['Address', b.addressLine ?? ''],
               ['Payment', b.payment ? `${b.payment.status} (${b.payment.mode}, ${b.payment.provider}, ${b.payment.orderId})` : 'None'],
               ['Cancelled by', b.cancelledBy ? `${b.cancelledBy}: ${b.cancelReason}` : 'Not cancelled'],
@@ -47,6 +54,66 @@ export default async function AdminBookingDetail({ params }: { params: Promise<{
               </div>
             ))}
           </dl>
+          {teamOpen && (
+            <section aria-labelledby="team-title">
+              <h2 id="team-title" className="font-display text-h3 font-semibold">
+                People ({b.workers.length} of {b.workersNeeded})
+              </h2>
+              {b.workers.length < b.workersNeeded && (
+                <div className="mt-2">
+                  <Notice tone="warning">
+                    {b.workersNeeded - b.workers.length} paid {b.workersNeeded - b.workers.length === 1 ? 'place is' : 'places are'} empty. The job cannot start until every place is filled.
+                  </Notice>
+                </div>
+              )}
+              <ul className="mt-3 border-t border-rule">
+                {b.workers.map((w) => (
+                  <li key={w.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-rule py-3">
+                    <span className="font-semibold">{w.name}</span>
+                    <ActionForm action={releaseWorkerAction} errorTitle="Could not release">
+                      <input type="hidden" name="bookingId" value={b.id} />
+                      <input type="hidden" name="workerId" value={w.id} />
+                      <div className="flex gap-2">
+                        <Input name="reason" placeholder="Reason" aria-label={`Reason for taking ${w.name} off`} required />
+                        <SubmitButton variant="secondary">
+                          Take off<span className="sr-only"> {w.name}</span>
+                        </SubmitButton>
+                      </div>
+                    </ActionForm>
+                  </li>
+                ))}
+              </ul>
+              {b.workers.length < b.workersNeeded && (
+                <>
+                  <h3 className="mt-6 font-semibold">Free and eligible for this slot ({suggestions.length})</h3>
+                  {suggestions.length === 0 ? (
+                    <p className="mt-2 text-ink-2">Nobody verified for this service is free in this area for the whole slot.</p>
+                  ) : (
+                    <ul className="mt-2 border-t border-rule">
+                      {suggestions.slice(0, 20).map((w) => (
+                        <li key={w.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-rule py-3">
+                          <span>
+                            <span className="font-semibold">{w.displayName}</span>
+                            <span className="text-small text-ink-2">
+                              {' '}
+                              · {w.yearsExperience} years · {w.ratingCount ? `${(w.ratingAvgX100 / 100).toFixed(1)} from ${w.ratingCount}` : 'new'}
+                            </span>
+                          </span>
+                          <ActionForm action={assignWorkerAction} errorTitle="Could not assign">
+                            <input type="hidden" name="bookingId" value={b.id} />
+                            <input type="hidden" name="workerId" value={w.id} />
+                            <SubmitButton variant="secondary">
+                              Assign<span className="sr-only"> {w.displayName}</span>
+                            </SubmitButton>
+                          </ActionForm>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )}
+            </section>
+          )}
           <section>
             <h2 className="font-display text-h3 font-semibold">Ledger</h2>
             {ledger === null ? (

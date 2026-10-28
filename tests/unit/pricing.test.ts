@@ -68,3 +68,24 @@ describe('pricing engine', () => {
     expect(formatInr(12345)).toBe('₹123.45');
   });
 });
+
+describe('team pricing', () => {
+  it('prices one person and multiplies, so every share is exact and the total still balances', () => {
+    for (const people of [2, 3, 7, 50]) {
+      for (const rate of [19999, 28000, 33333]) {
+        const one = computePrice({ ...base, pricing: { ...DRIVER_PRICING, hourlyRatePaise: rate }, durationMinutes: 300 });
+        const team = computePrice({ ...base, pricing: { ...DRIVER_PRICING, hourlyRatePaise: rate }, durationMinutes: 300, workersCount: people });
+        expect(team.workersCount).toBe(people);
+        expect(team.customer.totalPaise).toBe(one.customer.totalPaise * people);
+        expect(team.worker).toEqual(one.worker);
+        expect(team.allocations.reduce((s, a) => s + a.amountPaise, 0)).toBe(team.customer.totalPaise);
+        expect(team.allocations.find((a) => a.account === 'worker_payable')!.amountPaise).toBe(team.worker.netPaise * people);
+      }
+    }
+    const label = computePrice({ ...base, pricing: DRIVER_PRICING, durationMinutes: 240, workersCount: 3 }).customer.lines[0]!.label;
+    expect(label).toBe('Personal driver, 4 hours, 3 people');
+    expect(computePrice({ ...base, pricing: DRIVER_PRICING, durationMinutes: 240 }).workersCount).toBeUndefined();
+    expect(() => computePrice({ ...base, pricing: DRIVER_PRICING, durationMinutes: 240, workersCount: 0 })).toThrow();
+    expect(() => computePrice({ ...base, pricing: DRIVER_PRICING, durationMinutes: 240, workersCount: 51 })).toThrow();
+  });
+});

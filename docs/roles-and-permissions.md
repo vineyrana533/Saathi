@@ -37,6 +37,9 @@ Legend: **Y** allowed, **Own** only rows the user owns or is party to, **Org** o
 | `worker.availability.manage` | | Own | | Y | | | Y | Org | |
 | `customer.id.submit` (ID check for Tier B and C bookings) | Own | | | | | | | | |
 | `customer.id.review` (approve or reject customer IDs; every file view logged) | | | Y | | | | Y | | |
+| `request.create` (ask for a quote, answer quotes, cancel own requests) | Own | | | | | | | | |
+| `request.manage` (request queue, ownership, quotes) | | | | Y | | | Y | | |
+| `booking.assign` (fill or empty places on a booking before it starts) | | | | Y | | | Y | | |
 | `booking.create` | Y | | | Y | | | Y | | Y |
 | `booking.read` | Own | Own | | Y | Y | Y | Y | Org | Org |
 | `booking.cancel` | Own | Own | | Y | | | Y | | Org |

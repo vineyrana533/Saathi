@@ -16,6 +16,15 @@ export default async function AdminOverview() {
       ],
     },
     {
+      title: 'Requests and teams',
+      items: [
+        ['Open requests', o.open_requests, '/admin/requests'],
+        ['Waiting for a first response', o.unanswered_requests, '/admin/requests?view=unanswered'],
+        ['First response overdue', o.overdue_requests, '/admin/requests?view=unanswered'],
+        ['Bookings with places to fill', o.needs_people, '/admin/bookings?people=missing'],
+      ],
+    },
+    {
       title: 'Bookings',
       items: [
         ['Waiting for payment', o.pending_payment, '/admin/bookings?status=pending_payment'],
@@ -37,7 +46,7 @@ export default async function AdminOverview() {
     <>
       <h1 className="font-display text-h1 font-bold">Overview</h1>
       <p className="mt-2 text-ink-2">Live counts from the database. Nothing here is sample data.</p>
-      <div className="mt-8 grid gap-10 lg:grid-cols-3">
+      <div className="mt-8 grid gap-10 md:grid-cols-2 xl:grid-cols-4">
         {groups.map((g) => (
           <section key={g.title} aria-labelledby={`g-${g.title}`}>
             <h2 id={`g-${g.title}`} className="eyebrow">

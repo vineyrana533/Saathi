@@ -83,7 +83,7 @@ How they run:
 - `GET` or `POST /api/cron/run` with `Authorization: Bearer <CRON_SECRET>`. In production this is meant to be called by Vercel Cron; the cron schedule is not configured yet (no `vercel.json`), and per-minute schedules need a paid Vercel plan (decisions.md T-07).
 - `pnpm jobs:run` runs the same function once from a terminal.
 
-The `jobs` table (one-off jobs with a unique `dedupe_key`) exists in the schema, but nothing enqueues or processes rows in it yet. Milestone 2 and 3 work (quote expiry, safety check-ins, payouts) will use it.
+The `jobs` table (one-off jobs with a unique `dedupe_key`) exists in the schema, but nothing enqueues or processes rows in it yet. Quote and request expiry (Milestone 2) did not need it: `expireQuotesAndRequests` runs in the daily sweep, and the same check runs before every read or action on a request, so a stale quote can never be accepted even between sweeps. Safety check-ins and payouts (Milestone 3) will use the jobs table.
 
 ## 5. Planned: CRM and follow-up automation (M15)
 

@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, lt, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, lt, sql } from 'drizzle-orm';
 import { bookingAssignments, bookingEvents, bookings, type BookingStatus } from './schema';
 import { createBookingInput, slotInput, validateSlot, assertCleanAddress, type CreateBookingInput, type SlotInput } from './validation';
 import { services } from '../catalog/schema';
@@ -10,10 +10,11 @@ import { loadServiceInCity, type ServiceInCity } from '../catalog/service';
 import { findEligibleWorkers } from '../workers/eligibility';
 import { computePrice, cancellationFee, type PriceSnapshot } from '../pricing/engine';
 import { supplyStatus } from '../seo/supply';
-import { postJournal } from '../payments/ledger';
+import { postJournal, type JournalLineInput } from '../payments/ledger';
 import { enqueueNotification } from '../notifications/service';
 import { CONSENT_VERSIONS } from '../identity/service';
 import { hasVerifiedId } from '../identity/id-check';
+import { acceptQuoteForBooking } from '../requests/accept-hook';
 import { consents } from '../identity/schema';
 import { anonymousCtx, asSystem, pgCode, PG_EXCLUSION_VIOLATION, withDb, type Ctx, type Tx } from '@/platform/db/client';
 import { requirePermission, isStaff } from '@/platform/auth/permissions';
@@ -181,28 +182,9 @@ export async function createBooking(ctx: Ctx, raw: CreateBookingInput) {
         data: { workerId: input.workerId, totalPaise: booking.totalPaise },
       });
 
-      const gateway = paymentGateway();
-      const order = await gateway.createOrder({ amountPaise: booking.totalPaise, receipt: booking.ref });
-      const [payment] = await tx
-        .insert(payments)
-        .values({
-          bookingId: booking.id,
-          provider: gateway.provider,
-          mode: gateway.mode,
-          providerOrderId: order.orderId,
-          amountPaise: booking.totalPaise,
-          status: 'created',
-        })
-        .returning({ id: payments.id });
-
+      const payment = await openPaymentOrder(tx, booking);
       await audit(tx, ctx, 'booking.created', 'booking', booking.id, { ref: booking.ref, totalPaise: booking.totalPaise });
-      return {
-        bookingId: booking.id,
-        ref: booking.ref,
-        totalPaise: booking.totalPaise,
-        holdExpiresAt: booking.holdExpiresAt,
-        payment: { id: payment!.id, provider: gateway.provider, mode: gateway.mode, orderId: order.orderId },
-      };
+      return { bookingId: booking.id, ref: booking.ref, totalPaise: booking.totalPaise, holdExpiresAt: booking.holdExpiresAt, payment };
     });
   } catch (e) {
     if (pgCode(e) === PG_EXCLUSION_VIOLATION) {
@@ -210,6 +192,35 @@ export async function createBooking(ctx: Ctx, raw: CreateBookingInput) {
     }
     throw e;
   }
+}
+
+/** Opens a gateway order for a new booking. Shared by direct booking and quote acceptance. */
+export async function openPaymentOrder(tx: Tx, booking: { id: string; ref: string; totalPaise: number }) {
+  const gateway = paymentGateway();
+  const order = await gateway.createOrder({ amountPaise: booking.totalPaise, receipt: booking.ref });
+  const [payment] = await tx
+    .insert(payments)
+    .values({
+      bookingId: booking.id,
+      provider: gateway.provider,
+      mode: gateway.mode,
+      providerOrderId: order.orderId,
+      amountPaise: booking.totalPaise,
+      status: 'created',
+    })
+    .returning({ id: payments.id });
+  return { id: payment!.id, provider: gateway.provider, mode: gateway.mode, orderId: order.orderId };
+}
+
+/** Workers actively assigned to a booking, oldest first. */
+export async function activeTeam(tx: Tx, bookingId: string) {
+  return tx
+    .select({ workerId: workerProfiles.id, userId: workerProfiles.userId, name: workerProfiles.displayName,
+      ratingAvgX100: workerProfiles.ratingAvgX100, ratingCount: workerProfiles.ratingCount })
+    .from(bookingAssignments)
+    .innerJoin(workerProfiles, eq(workerProfiles.id, bookingAssignments.workerId))
+    .where(and(eq(bookingAssignments.bookingId, bookingId), eq(bookingAssignments.status, 'active')))
+    .orderBy(asc(bookingAssignments.createdAt));
 }
 
 /** Releases payment holds that timed out. Runs in system scope (job or booking transaction). */
@@ -259,14 +270,11 @@ export async function confirmBookingAfterCapture(tx: Tx, bookingId: string) {
     })
     .where(eq(bookings.id, b.id));
   await tx.insert(bookingEvents).values({ bookingId: b.id, fromStatus: 'pending_payment', toStatus: 'confirmed', actorRole: 'system' });
-  const [a] = await tx
-    .select({ userId: workerProfiles.userId })
-    .from(bookingAssignments)
-    .innerJoin(workerProfiles, eq(workerProfiles.id, bookingAssignments.workerId))
-    .where(and(eq(bookingAssignments.bookingId, b.id), eq(bookingAssignments.status, 'active')))
-    .limit(1);
   await enqueueNotification(tx, { channel: 'sms', userId: b.customerUserId, template: 'booking_confirmed_customer', payload: { ref: b.ref }, idempotencyKey: `confirmed:customer:${b.id}` });
-  if (a) await enqueueNotification(tx, { channel: 'sms', userId: a.userId, template: 'booking_confirmed_worker', payload: { ref: b.ref }, idempotencyKey: `confirmed:worker:${b.id}` });
+  for (const w of await activeTeam(tx, b.id)) {
+    await enqueueNotification(tx, { channel: 'sms', userId: w.userId, template: 'booking_confirmed_worker', payload: { ref: b.ref }, idempotencyKey: `confirmed:worker:${b.id}:${w.workerId}` });
+  }
+  await acceptQuoteForBooking(tx, b.id);
   return { confirmed: true as const, status: 'confirmed' as const };
 }
 
@@ -291,12 +299,17 @@ async function verifyJobCode(ctx: Ctx, bookingId: string, code: string, phase: '
   await enforceRateLimit(`booking:otp:${bookingId}`, LIMITS.otpEntryPerBooking);
 
   const outcome = await withDb(ctx, async (tx) => {
-    const { booking: b, worker } = await loadWorkerBooking(tx, ctx, bookingId);
+    const { booking: b } = await loadWorkerBooking(tx, ctx, bookingId);
     const expected: BookingStatus = phase === 'start' ? 'confirmed' : 'in_progress';
     if (b.status !== expected) return { ok: false as const, error: conflict('wrong_status', phase === 'start' ? 'This job cannot be started now' : 'This job is not in progress') };
     const maxAttempts = await getConfig(tx, 'booking.otp_max_attempts');
     if (b.otpFailedAttempts >= maxAttempts) {
       return { ok: false as const, error: new AppError('otp_locked', 'Too many wrong codes. Our team has been alerted and will help you.', 423) };
+    }
+    // A team job starts only with every paid place filled; checked first, as it is the more useful message.
+    const team = await asSystem(tx, ctx, () => activeTeam(tx, b.id));
+    if (phase === 'start' && team.length < b.workersNeeded) {
+      return { ok: false as const, error: conflict('team_incomplete', 'Not everyone on this job is confirmed yet. Our team is arranging the rest; please contact support.') };
     }
     if (phase === 'start') {
       const win = await getConfig(tx, 'booking.start_window');
@@ -320,9 +333,11 @@ async function verifyJobCode(ctx: Ctx, bookingId: string, code: string, phase: '
     await tx.insert(bookingEvents).values({ bookingId: b.id, fromStatus: b.status, toStatus: to, actorUserId: ctx.userId, actorRole: 'worker' });
     if (phase === 'end') {
       await asSystem(tx, ctx, async () => {
-        await postCompletionJournal(tx, b, worker.id);
+        await postCompletionJournal(tx, b, team.map((w) => w.workerId));
         await enqueueNotification(tx, { channel: 'in_app', userId: b.customerUserId, template: 'rate_your_booking', payload: { ref: b.ref }, idempotencyKey: `rate:customer:${b.id}` });
-        await enqueueNotification(tx, { channel: 'in_app', userId: worker.userId, template: 'rate_your_customer', payload: { ref: b.ref }, idempotencyKey: `rate:worker:${b.id}` });
+        for (const w of team) {
+          await enqueueNotification(tx, { channel: 'in_app', userId: w.userId, template: 'rate_your_customer', payload: { ref: b.ref }, idempotencyKey: `rate:worker:${b.id}:${w.workerId}` });
+        }
       });
     }
     await audit(tx, ctx, phase === 'start' ? 'booking.started' : 'booking.completed', 'booking', b.id);
@@ -335,9 +350,15 @@ async function verifyJobCode(ctx: Ctx, bookingId: string, code: string, phase: '
 export const startJob = (ctx: Ctx, bookingId: string, code: string) => verifyJobCode(ctx, bookingId, code, 'start');
 export const finishJob = (ctx: Ctx, bookingId: string, code: string) => verifyJobCode(ctx, bookingId, code, 'end');
 
-/** Completion journal straight from the booking's price snapshot (price shown = snapshot = ledger). */
-async function postCompletionJournal(tx: Tx, b: typeof bookings.$inferSelect, workerId: string) {
+/**
+ * Completion journal straight from the booking's price snapshot (price shown = snapshot = ledger).
+ * The worker_payable allocation is split into one line per assigned person, each the snapshot's
+ * per-person net, so a team booking pays everyone the same amount and still balances.
+ */
+async function postCompletionJournal(tx: Tx, b: typeof bookings.$inferSelect, workerIds: string[]) {
   const snap = b.priceSnapshot;
+  const people = snap.workersCount ?? 1;
+  if (workerIds.length !== people) throw new Error(`booking ${b.ref} has ${workerIds.length} active workers for ${people} paid places`);
   await postJournal(tx, {
     kind: 'completion',
     bookingId: b.id,
@@ -346,12 +367,11 @@ async function postCompletionJournal(tx: Tx, b: typeof bookings.$inferSelect, wo
     createdBy: 'system',
     lines: [
       { account: 'customer_funds_held', debitPaise: snap.customer.totalPaise, lineCode: 'release_held_funds' },
-      ...snap.allocations.map((a) => ({
-        account: a.account,
-        owner: a.account === 'worker_payable' ? { type: 'worker', id: workerId } : undefined,
-        creditPaise: a.amountPaise,
-        lineCode: a.account,
-      })),
+      ...snap.allocations.flatMap((a): JournalLineInput[] =>
+        a.account === 'worker_payable'
+          ? workerIds.map((id) => ({ account: a.account, owner: { type: 'worker', id }, creditPaise: snap.worker.netPaise, lineCode: a.account }))
+          : [{ account: a.account, creditPaise: a.amountPaise, lineCode: a.account }],
+      ),
     ],
   });
 }
@@ -379,6 +399,17 @@ export async function cancelBooking(ctx: Ctx, input: { bookingId: string; reason
       ? cancellationFee(config.cancellationPolicy, b.totalPaise, hoursBefore)
       : { feePaise: 0, band: 'none' as const };
     const by = asCustomer ? 'customer' : asWorker ? 'worker' : 'staff';
+
+    if (asWorker && b.workersNeeded > 1) {
+      // The booking stays on; the empty place shows as a partial fill for ops to refill.
+      await asSystem(tx, ctx, async () => {
+        await tx.update(bookingAssignments).set({ status: 'released', releasedAt: sql`now()` })
+          .where(and(eq(bookingAssignments.bookingId, b.id), eq(bookingAssignments.status, 'active'),
+            sql`${bookingAssignments.workerId} in (select id from worker_profiles where user_id = ${ctx.userId})`));
+      });
+      await audit(tx, ctx, 'booking.worker_left_team', 'booking', b.id, { reason, feltUnsafe: !!input.feltUnsafe });
+      return { feePaise: 0, band: 'none' as const, leftTeam: true as const };
+    }
 
     await tx.update(bookings).set({ status: 'cancelled', cancelledAt: sql`now()`, cancelledBy: by, cancelReason: reason }).where(eq(bookings.id, b.id));
     await asSystem(tx, ctx, async () => {
@@ -422,17 +453,23 @@ const bookingListColumns = {
   zoneName: zones.name,
 };
 
+/** Names of everyone actively on a booking, in assignment order (null when nobody is yet). */
+const teamNames = sql<string | null>`(
+  select string_agg(wp.display_name, ', ' order by ba.created_at)
+  from booking_assignments ba join worker_profiles wp on wp.id = ba.worker_id
+  where ba.booking_id = ${bookings.id} and ba.status = 'active')`;
+const teamAssigned = sql<number>`(
+  select count(*)::int from booking_assignments ba where ba.booking_id = ${bookings.id} and ba.status = 'active')`;
+
 export async function listMyBookings(ctx: Ctx) {
   if (!ctx.userId) throw unauthenticated();
   return withDb(ctx, (tx) =>
     tx
-      .select({ ...bookingListColumns, workerName: workerProfiles.displayName, workerId: workerProfiles.id })
+      .select({ ...bookingListColumns, workerName: teamNames, workersNeeded: bookings.workersNeeded, assigned: teamAssigned })
       .from(bookings)
       .innerJoin(services, eq(services.id, bookings.serviceId))
       .innerJoin(cities, eq(cities.id, bookings.cityId))
       .innerJoin(zones, eq(zones.id, bookings.zoneId))
-      .leftJoin(bookingAssignments, and(eq(bookingAssignments.bookingId, bookings.id)))
-      .leftJoin(workerProfiles, eq(workerProfiles.id, bookingAssignments.workerId))
       .where(eq(bookings.customerUserId, ctx.userId!))
       .orderBy(desc(bookings.startsAt))
       .limit(100),
@@ -443,9 +480,9 @@ export async function listWorkerJobs(ctx: Ctx) {
   requirePermission(ctx, 'booking.start_finish');
   return withDb(ctx, (tx) =>
     tx
-      .select(bookingListColumns)
+      .select({ ...bookingListColumns, workersNeeded: bookings.workersNeeded })
       .from(bookings)
-      .innerJoin(bookingAssignments, eq(bookingAssignments.bookingId, bookings.id))
+      .innerJoin(bookingAssignments, and(eq(bookingAssignments.bookingId, bookings.id), eq(bookingAssignments.status, 'active')))
       .innerJoin(workerProfiles, eq(workerProfiles.id, bookingAssignments.workerId))
       .innerJoin(services, eq(services.id, bookings.serviceId))
       .innerJoin(cities, eq(cities.id, bookings.cityId))
@@ -483,16 +520,18 @@ export async function getBookingForViewer(ctx: Ctx, bookingId: string) {
       .limit(1);
     if (!row) throw notFound('Booking');
     const b = row.booking;
-    const [assignment] = await tx
+    // Active team, or for a finished-off booking (cancelled, expired) the people who were on it.
+    const everyone = await tx
       .select({ workerId: workerProfiles.id, workerName: workerProfiles.displayName, workerUserId: workerProfiles.userId,
         ratingAvgX100: workerProfiles.ratingAvgX100, ratingCount: workerProfiles.ratingCount, status: bookingAssignments.status })
       .from(bookingAssignments)
       .innerJoin(workerProfiles, eq(workerProfiles.id, bookingAssignments.workerId))
       .where(eq(bookingAssignments.bookingId, b.id))
-      .orderBy(desc(bookingAssignments.createdAt))
-      .limit(1);
+      .orderBy(asc(bookingAssignments.createdAt));
+    const active = everyone.filter((a) => a.status === 'active');
+    const team = active.length || b.workersNeeded > 1 ? active : everyone.slice(-1);
     const viewer: 'customer' | 'worker' | 'staff' =
-      b.customerUserId === ctx.userId ? 'customer' : assignment?.workerUserId === ctx.userId ? 'worker' : 'staff';
+      b.customerUserId === ctx.userId ? 'customer' : everyone.some((a) => a.workerUserId === ctx.userId) ? 'worker' : 'staff';
     if (viewer === 'staff' && !isStaff(ctx)) throw forbidden();
     const [customer] = await tx.select({ name: users.displayName }).from(users).where(eq(users.id, b.customerUserId)).limit(1);
     const [payment] = await tx
@@ -543,7 +582,10 @@ export async function getBookingForViewer(ctx: Ctx, bookingId: string) {
           : 0,
       cancelReason: b.cancelReason,
       cancelledBy: b.cancelledBy,
-      worker: assignment ? { id: assignment.workerId, name: assignment.workerName, ratingAvgX100: assignment.ratingAvgX100, ratingCount: assignment.ratingCount } : null,
+      workers: team.map((a) => ({ id: a.workerId, name: a.workerName, ratingAvgX100: a.ratingAvgX100, ratingCount: a.ratingCount })),
+      /** First person on the booking; kept for API clients written for one-person bookings. */
+      worker: team[0] ? { id: team[0].workerId, name: team[0].workerName, ratingAvgX100: team[0].ratingAvgX100, ratingCount: team[0].ratingCount } : null,
+      workersNeeded: b.workersNeeded,
       customerName: viewer === 'customer' ? null : customer?.name ?? 'Customer',
       payment: viewer === 'worker' ? null : payment ?? null,
       codes,
@@ -553,22 +595,22 @@ export async function getBookingForViewer(ctx: Ctx, bookingId: string) {
   });
 }
 
-export async function listBookingsForAdmin(ctx: Ctx, opts: { status?: string; q?: string; page?: number }) {
+export async function listBookingsForAdmin(ctx: Ctx, opts: { status?: string; q?: string; page?: number; needsPeople?: boolean }) {
   requirePermission(ctx, 'booking.read_all');
   const page = Math.max(1, opts.page ?? 1);
   return withDb(ctx, async (tx) => {
     const conds = [];
     if (opts.status) conds.push(eq(bookings.status, opts.status as BookingStatus));
     if (opts.q) conds.push(sql`${bookings.ref} ilike ${'%' + opts.q.replace(/[%_]/g, '') + '%'}`);
+    // Partial fill: paid places without a person, on bookings that are still going ahead.
+    if (opts.needsPeople) conds.push(inArray(bookings.status, ['pending_payment', 'confirmed']), sql`${teamAssigned} < ${bookings.workersNeeded}`);
     const rows = await tx
-      .select({ ...bookingListColumns, workerName: workerProfiles.displayName, customerName: users.displayName })
+      .select({ ...bookingListColumns, workerName: teamNames, customerName: users.displayName, workersNeeded: bookings.workersNeeded, assigned: teamAssigned })
       .from(bookings)
       .innerJoin(services, eq(services.id, bookings.serviceId))
       .innerJoin(cities, eq(cities.id, bookings.cityId))
       .innerJoin(zones, eq(zones.id, bookings.zoneId))
       .innerJoin(users, eq(users.id, bookings.customerUserId))
-      .leftJoin(bookingAssignments, and(eq(bookingAssignments.bookingId, bookings.id), eq(bookingAssignments.status, 'active')))
-      .leftJoin(workerProfiles, eq(workerProfiles.id, bookingAssignments.workerId))
       .where(conds.length ? and(...conds) : undefined)
       .orderBy(desc(bookings.createdAt))
       .limit(26)

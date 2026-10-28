@@ -49,3 +49,28 @@ export function firstBookableDateIst(leadTimeMinutes: number, time: string): str
     if (fromIst(date, time).getTime() >= earliest) return date;
   }
 }
+
+export interface BusinessHours {
+  startMinute: number;
+  endMinute: number;
+  /** 0 = Monday, as in istParts. */
+  weekdays: number[];
+}
+
+/** `from` plus `minutes` of IST working time, skipping evenings and days off. */
+export function addBusinessMinutes(from: Date, minutes: number, hours: BusinessHours): Date {
+  let cursor = from;
+  let remaining = minutes;
+  for (let guard = 0; guard < 400; guard++) {
+    const p = istParts(cursor);
+    const dayStart = fromIst(p.date, '00:00').getTime();
+    if (hours.weekdays.includes(p.weekday) && p.minuteOfDay < hours.endMinute) {
+      const start = Math.max(p.minuteOfDay, hours.startMinute);
+      const available = hours.endMinute - start;
+      if (remaining <= available) return new Date(dayStart + (start + remaining) * 60_000);
+      remaining -= available;
+    }
+    cursor = new Date(dayStart + 86_400_000);
+  }
+  throw new Error('business hours never open');
+}

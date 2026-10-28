@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { normaliseIndianMobile, maskPhone } from '@/platform/auth/phone';
-import { fromIst, istParts } from '@/platform/time';
+import { addBusinessMinutes, fromIst, istParts } from '@/platform/time';
 import { redact } from '@/platform/logger';
 import { can } from '@/platform/auth/permissions';
 import { decrypt, encrypt } from '@/platform/crypto';
@@ -83,5 +83,20 @@ describe('document encryption', () => {
     expect(decrypt(blob).toString()).toBe('licence scan');
     blob.writeUInt8(blob.readUInt8(blob.length - 1) ^ 1, blob.length - 1);
     expect(() => decrypt(blob)).toThrow();
+  });
+});
+
+describe('business hours', () => {
+  const hours = { startMinute: 9 * 60, endMinute: 19 * 60, weekdays: [0, 1, 2, 3, 4, 5] };
+  const at = (date: string, time: string) => fromIst(date, time);
+  it('adds working minutes inside the day', () => {
+    // 2026-10-28 is a Wednesday.
+    expect(addBusinessMinutes(at('2026-10-28', '10:00'), 120, hours)).toEqual(at('2026-10-28', '12:00'));
+  });
+  it('carries over evenings, starts at opening time, and skips Sunday', () => {
+    expect(addBusinessMinutes(at('2026-10-28', '18:30'), 120, hours)).toEqual(at('2026-10-29', '10:30'));
+    expect(addBusinessMinutes(at('2026-10-28', '06:00'), 120, hours)).toEqual(at('2026-10-28', '11:00'));
+    expect(addBusinessMinutes(at('2026-10-31', '18:00'), 120, hours)).toEqual(at('2026-11-02', '10:00'));
+    expect(addBusinessMinutes(at('2026-11-01', '12:00'), 30, hours)).toEqual(at('2026-11-02', '09:30'));
   });
 });

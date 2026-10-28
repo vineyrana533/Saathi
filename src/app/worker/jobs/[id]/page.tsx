@@ -36,6 +36,7 @@ export default async function WorkerJobPage({ params }: { params: Promise<{ id: 
         <h1 className="mt-3 font-display text-h1 font-bold">{formatIst(b.startsAt, { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}</h1>
         <p className="mt-2 text-ink-2">
           {formatIst(b.startsAt, { timeStyle: 'short' })} to {formatIst(b.endsAt, { timeStyle: 'short' })}, {b.zoneName}, {b.cityName}. {t('booking.customer')}: {b.customerName}
+          {b.workersNeeded > 1 ? `. ${t('booking.teamSize', { n: b.workersNeeded })}: ${b.workers.map((w) => w.name).join(', ')}` : ''}
         </p>
       </div>
 

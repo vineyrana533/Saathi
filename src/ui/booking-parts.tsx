@@ -81,15 +81,18 @@ export function ChatPanel({
   );
 }
 
-export function RatingForm({ bookingId, name, action }: { bookingId: string; name: string; action: Action }) {
+export function RatingForm({ bookingId, workerId, name, action }: { bookingId: string; workerId?: string; name: string; action: Action }) {
+  // One form per person on a team booking, so ids must stay unique on the page.
+  const key = workerId ? workerId.slice(0, 8) : 'one';
   return (
-    <section aria-labelledby="rate-title" className="border-t border-ink pt-6">
-      <h2 id="rate-title" className="font-display text-h3 font-semibold">
+    <section aria-labelledby={`rate-title-${key}`} className="border-t border-ink pt-6">
+      <h2 id={`rate-title-${key}`} className="font-display text-h3 font-semibold">
         {t('booking.rateTitle', { name })}
       </h2>
       <ActionForm action={action} errorTitle={t('common.errorTitle')} className="mt-4">
         <input type="hidden" name="bookingId" value={bookingId} />
-        <fieldset id="f-score">
+        {workerId && <input type="hidden" name="workerId" value={workerId} />}
+        <fieldset id={`f-score-${key}`}>
           <legend className="text-small font-semibold">{t('booking.rateScore')}</legend>
           <div className="mt-2 flex flex-wrap gap-2">
             {[5, 4, 3, 2, 1].map((n) => (
@@ -101,8 +104,8 @@ export function RatingForm({ bookingId, name, action }: { bookingId: string; nam
             ))}
           </div>
         </fieldset>
-        <Field id="f-comment" label={t('booking.rateComment')}>
-          <Textarea id="f-comment" name="comment" maxLength={500} />
+        <Field id={`f-comment-${key}`} label={t('booking.rateComment')}>
+          <Textarea id={`f-comment-${key}`} name="comment" maxLength={500} />
         </Field>
         <div>
           <SubmitButton>{t('booking.rateSubmit')}</SubmitButton>

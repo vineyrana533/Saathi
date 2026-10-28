@@ -29,7 +29,7 @@ export const PERSONAL_DRIVER_CONFIG: ServiceConfig = serviceConfigSchema.parse({
   leadTimeMinutes: 180,
   maxAdvanceDays: 30,
   allowedHours: { startMinute: 6 * 60, endMinute: 23 * 60 },
-  workersRequired: { min: 1, max: 1 },
+  workersRequired: { min: 1, max: 10 },
   location: { mode: 'customer_address', travelRadiusKm: 40, outstationAllowed: false },
   questions: [
     { id: 'vehicle_class', label: 'What will they drive?', type: 'select', required: true,
@@ -61,7 +61,7 @@ const EVENT_STAFF_CONFIG: ServiceConfig = serviceConfigSchema.parse({
   leadTimeMinutes: 24 * 60,
   maxAdvanceDays: 90,
   allowedHours: { startMinute: 7 * 60, endMinute: 23 * 60 },
-  workersRequired: { min: 1, max: 1 },
+  workersRequired: { min: 1, max: 50 },
   location: { mode: 'customer_address', travelRadiusKm: 40, outstationAllowed: false },
   questions: [
     { id: 'role', label: 'Role needed', type: 'select', required: true, options: [
@@ -77,7 +77,7 @@ const EVENT_STAFF_CONFIG: ServiceConfig = serviceConfigSchema.parse({
   safety: { startOtp: true, endOtp: true, checkInIntervalMinutes: null, sos: true, publicVenueOnly: false },
   highlights: [
     'Hosts, ushers, registration desk staff and helpers for events and offices.',
-    'Book one person online. For a bigger team, tell us what you need and our team arranges it.',
+    'Book one person online, or ask for a quote for a team of up to 50.',
     'Start and end codes for every person on the job.',
   ],
 });
@@ -87,7 +87,7 @@ const ERRANDS_CONFIG: ServiceConfig = serviceConfigSchema.parse({
   leadTimeMinutes: 180,
   maxAdvanceDays: 30,
   allowedHours: { startMinute: 7 * 60, endMinute: 21 * 60 },
-  workersRequired: { min: 1, max: 1 },
+  workersRequired: { min: 1, max: 5 },
   location: { mode: 'customer_address', travelRadiusKm: 25, outstationAllowed: false },
   questions: [
     { id: 'errand_type', label: 'What kind of help?', type: 'select', required: true, options: [
@@ -168,7 +168,7 @@ const DOMESTIC_HELP_CONFIG: ServiceConfig = serviceConfigSchema.parse({
   leadTimeMinutes: 24 * 60,
   maxAdvanceDays: 60,
   allowedHours: { startMinute: 7 * 60, endMinute: 20 * 60 },
-  workersRequired: { min: 1, max: 1 },
+  workersRequired: { min: 1, max: 3 },
   location: { mode: 'customer_address', travelRadiusKm: 15, outstationAllowed: false },
   questions: [
     { id: 'task', label: 'What needs doing?', type: 'select', required: true, options: [
@@ -329,6 +329,8 @@ export async function seedCatalog(tx: Tx) {
     { key: 'quality.low_rating_threshold', value: 2, status: 'pending_signoff', note: 'P-05' },
     { key: 'tax.gst_on_commission_bps', value: 1800, status: 'needs_legal', note: 'L-03' },
     { key: 'tax.tds_bps', value: 0, status: 'needs_legal', note: 'L-05' },
+    { key: 'request.first_response_minutes', value: 120, status: 'pending_signoff', note: 'P-10 (business minutes)' },
+    { key: 'business_hours', value: { startMinute: 540, endMinute: 1140, weekdays: [0, 1, 2, 3, 4, 5] }, status: 'pending_signoff', note: 'P-10 (09:00 to 19:00 IST, Monday to Saturday)' },
   ];
   for (const d of defaults) {
     await tx.insert(configValues).values({ key: d.key, scope: 'global', value: d.value, status: d.status, note: d.note }).onConflictDoNothing();

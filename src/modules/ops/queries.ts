@@ -19,6 +19,10 @@ export async function opsOverview(ctx: Ctx) {
       open_flags: number;
       open_reports: number;
       waitlist: number;
+      open_requests: number;
+      unanswered_requests: number;
+      overdue_requests: number;
+      needs_people: number;
     }>(sql`
       select
         (select count(*)::int from worker_documents where status = 'pending') as pending_docs,
@@ -31,7 +35,12 @@ export async function opsOverview(ctx: Ctx) {
         (select count(*)::int from bookings where status = 'completed' and completed_at > now() - interval '7 days') as completed_7d,
         (select count(*)::int from moderation_flags where status = 'open') as open_flags,
         (select count(*)::int from reports where status = 'open') as open_reports,
-        (select count(*)::int from waitlist_entries) as waitlist`);
+        (select count(*)::int from waitlist_entries) as waitlist,
+        (select count(*)::int from service_requests where status in ('submitted','in_review','sourcing','quoted')) as open_requests,
+        (select count(*)::int from service_requests where status = 'submitted') as unanswered_requests,
+        (select count(*)::int from service_requests where status = 'submitted' and first_response_due_at < now()) as overdue_requests,
+        (select count(*)::int from bookings b where b.status in ('pending_payment','confirmed')
+           and (select count(*) from booking_assignments a where a.booking_id = b.id and a.status = 'active') < b.workers_needed) as needs_people`);
     return row!;
   });
 }

@@ -127,6 +127,17 @@ export const STATUS_TONE: Record<string, Tone> = {
   live: 'success',
   waitlist: 'warning',
   paused: 'neutral',
+  // Requests and quotes (Milestone 2)
+  submitted: 'warning',
+  in_review: 'info',
+  sourcing: 'info',
+  quoted: 'trust',
+  accepted: 'success',
+  declined: 'neutral',
+  draft: 'neutral',
+  sent: 'warning',
+  change_requested: 'info',
+  withdrawn: 'neutral',
 };
 
 /** Text + colour + icon, never colour alone. */

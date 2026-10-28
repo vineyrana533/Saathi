@@ -3,6 +3,7 @@ import { workerDocuments, workerServiceApprovals, workerProfiles } from '../work
 import { serviceConfigSchema } from '../catalog/config';
 import { services } from '../catalog/schema';
 import { expireStaleHolds } from '../bookings/service';
+import { applyRequestExpiry } from '../requests/assisted';
 import { dispatchPending, enqueueNotification } from '../notifications/service';
 import { systemCtx, withDb } from '@/platform/db/client';
 import { audit } from '@/platform/audit';
@@ -73,10 +74,16 @@ export async function dispatchNotifications() {
   return withDb(systemCtx(), (tx) => dispatchPending(tx));
 }
 
+/** Expires sent quotes past their validity and open requests whose start has passed. */
+export async function expireQuotesAndRequests() {
+  return withDb(systemCtx(), (tx) => applyRequestExpiry(tx));
+}
+
 export async function runAllSweeps() {
   const results: Record<string, unknown> = {};
   for (const [name, fn] of [
     ['expirePaymentHolds', expirePaymentHolds],
+    ['expireQuotesAndRequests', expireQuotesAndRequests],
     ['documentExpirySweep', documentExpirySweep],
     ['dispatchNotifications', dispatchNotifications],
   ] as const) {

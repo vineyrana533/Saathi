@@ -36,6 +36,9 @@ const MATRIX = {
   'waitlist.manage': ['ops', 'admin'],
   'customer.id.submit': ['customer'],
   'customer.id.review': ['verifier', 'admin'],
+  'request.create': ['customer'],
+  'request.manage': ['ops', 'admin'],
+  'booking.assign': ['ops', 'admin'],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Permission = keyof typeof MATRIX;

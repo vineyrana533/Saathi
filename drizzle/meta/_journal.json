@@ -64,6 +64,13 @@
       "when": 1793196679780,
       "tag": "0008_open_all_services",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793202601353,
+      "tag": "0009_assisted_requests",
+      "breakpoints": true
     }
   ]
 }

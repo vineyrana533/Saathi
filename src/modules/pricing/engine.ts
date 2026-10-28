@@ -8,6 +8,10 @@ import type { CancellationPolicy, PricingConfig } from '../catalog/config';
  *  - the breakdown shown before payment (`customer.lines`)
  *  - the booking's stored `price_snapshot`
  *  - the completion journal (`allocations`)
+ *
+ * Team bookings (Milestone 2) price one person and multiply every customer line and allocation by
+ * the number of people, so each person's earning (`worker`) is exact and the journal can pay
+ * each assigned worker the same `worker.netPaise`.
  */
 
 export interface PriceLine {
@@ -31,7 +35,10 @@ export interface PriceSnapshot {
   pricingVersion: number;
   pricing: PricingConfig;
   durationMinutes: number;
+  /** People paid for; absent on snapshots from before Milestone 2, meaning 1. */
+  workersCount?: number;
   customer: { lines: PriceLine[]; totalPaise: number };
+  /** Per person. */
   worker: { grossPaise: number; deductions: PriceLine[]; netPaise: number };
   allocations: { account: AllocationAccount; amountPaise: number }[];
 }
@@ -71,8 +78,11 @@ export function computePrice(input: {
   serviceSlug: string;
   citySlug: string;
   serviceLabel: string;
+  workersCount?: number;
 }): PriceSnapshot {
   const { pricing } = input;
+  const people = input.workersCount ?? 1;
+  if (!Number.isInteger(people) || people < 1 || people > 50) throw new Error('workers count must be 1 to 50');
   const service = serviceAmount(pricing, input.durationMinutes);
   const platformFee = applyBps(service, pricing.platformFee.bps) + pricing.platformFee.flatPaise;
   const commission = applyBps(service, pricing.commissionBps);
@@ -92,12 +102,12 @@ export function computePrice(input: {
   const customerLines: PriceLine[] = [
     {
       code: 'service',
-      label: `${input.serviceLabel}, ${Number.isInteger(hours) ? hours : hours.toFixed(1)} hours`,
-      amountPaise: service,
+      label: `${input.serviceLabel}, ${Number.isInteger(hours) ? hours : hours.toFixed(1)} hours${people > 1 ? `, ${people} people` : ''}`,
+      amountPaise: service * people,
     },
   ];
-  if (platformFee > 0) customerLines.push({ code: 'platform_fee', label: 'Booking fee', amountPaise: platformFee });
-  customerLines.push(...customerTaxes);
+  if (platformFee > 0) customerLines.push({ code: 'platform_fee', label: 'Booking fee', amountPaise: platformFee * people });
+  customerLines.push(...customerTaxes.map((l) => ({ ...l, amountPaise: l.amountPaise * people })));
   const customerTotal = customerLines.reduce((s, l) => s + l.amountPaise, 0);
 
   const deductions: PriceLine[] = [{ code: 'commission', label: 'Platform commission', amountPaise: commission }];
@@ -109,11 +119,11 @@ export function computePrice(input: {
   const gst = [...customerTaxes, ...workerTaxes].reduce((s, l) => s + l.amountPaise, 0);
   const allocations: PriceSnapshot['allocations'] = (
     [
-      { account: 'worker_payable', amountPaise: workerNet },
-      { account: 'commission_revenue', amountPaise: commission },
-      { account: 'platform_fee_revenue', amountPaise: platformFee },
-      { account: 'gst_output_payable', amountPaise: gst },
-      { account: 'tds_payable', amountPaise: tds },
+      { account: 'worker_payable', amountPaise: workerNet * people },
+      { account: 'commission_revenue', amountPaise: commission * people },
+      { account: 'platform_fee_revenue', amountPaise: platformFee * people },
+      { account: 'gst_output_payable', amountPaise: gst * people },
+      { account: 'tds_payable', amountPaise: tds * people },
     ] as const
   ).filter((a) => a.amountPaise > 0);
 
@@ -131,6 +141,7 @@ export function computePrice(input: {
     pricingVersion: input.pricingVersion,
     pricing,
     durationMinutes: input.durationMinutes,
+    ...(people > 1 ? { workersCount: people } : {}),
     customer: { lines: customerLines, totalPaise: customerTotal },
     worker: { grossPaise: service, deductions, netPaise: workerNet },
     allocations,

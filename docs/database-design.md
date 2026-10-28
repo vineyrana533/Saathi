@@ -1,6 +1,6 @@
 # Database design
 
-Status: Specification Complete for Milestones 0 and 1; later entities are outlined. Last updated 27 October 2026.
+Status: Specification Complete for Milestones 0 to 2; later entities are outlined. Last updated 28 October 2026.
 
 Engine: PostgreSQL 17. Extensions: `pgcrypto` (UUIDs), `btree_gist` (exclusion constraints). Schema source of truth: `src/modules/*/schema.ts` (Drizzle) plus hand-written SQL in `drizzle/` for roles, RLS policies, triggers and constraints Drizzle cannot express.
 
@@ -89,7 +89,7 @@ erDiagram
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `bookings` | id, ref (unique human code), customer_user_id, service_id, city_id, zone_id, status, starts_at, ends_at, address_line, landmark, answers (jsonb), price_snapshot (jsonb), total_paise, pricing_version, hold_expires_at, start_otp_hash, end_otp_hash, otp_failed_attempts, started_at, completed_at, cancelled_at, cancelled_by, cancel_reason, created_at, updated_at | Status values in [booking-lifecycle.md](booking-lifecycle.md). |
+| `bookings` | id, ref (unique human code), customer_user_id, service_id, city_id, zone_id, status, starts_at, ends_at, address_line, landmark, answers (jsonb), price_snapshot (jsonb), total_paise, pricing_version, workers_needed (1 to 50, default 1), hold_expires_at, start_otp_hash, end_otp_hash, otp_failed_attempts, started_at, completed_at, cancelled_at, cancelled_by, cancel_reason, created_at, updated_at | Status values in [booking-lifecycle.md](booking-lifecycle.md). |
 | `booking_assignments` | id, booking_id, worker_id, status (`active`, `released`), slot (tstzrange), created_at | Exclusion constraint below prevents double booking. |
 | `booking_events` | id, booking_id, from_status, to_status, actor_user_id, actor_role, at, data | Full status history. |
 
@@ -122,7 +122,11 @@ There is no balance column anywhere. Balances are `SUM(credit) - SUM(debit)` (or
 | `chat_messages` | id, booking_id, sender_user_id, body, status (`delivered`, `blocked`), block_reasons (text[]), created_at | Blocked messages are visible only to the sender (with explanation) and moderators. |
 | `moderation_flags` | id, entity_type, entity_id, reasons, severity (`block`, `review`), status (`open`, `resolved`), created_at, resolved_by | Prohibited content queue. |
 | `reports` | id, reporter_user_id, entity_type, entity_id, reason, details, status, created_at | One-tap report on profile, booking or chat. |
-| `ratings` | id, booking_id, rater_user_id, ratee_user_id, direction (`customer_to_worker`, `worker_to_customer`), score (1 to 5), comment, status (`visible`, `pending_review`, `hidden`), created_at; unique (booking_id, direction) | Allowed only after completion. Scores of 2 or less go to quality review. |
+| `ratings` | id, booking_id, rater_user_id, ratee_user_id, direction (`customer_to_worker`, `worker_to_customer`), score (1 to 5), comment, status (`visible`, `pending_review`, `hidden`), created_at; unique (booking_id, rater_user_id, ratee_user_id) | Allowed only after completion, once per pair of people (one per worker on a team booking). Scores of 2 or less go to quality review. |
+| `customer_id_checks` | id, user_id, id_type, number_masked, status (`pending`, `approved`, `rejected`), storage_key, sha256, mime_type, reviewed_by, reviewed_at, review_note, created_at | Needed before booking in-home services (decisions.md T-32). File encrypted at rest. |
+| `service_requests` | id, ref (`RQ-`), customer_user_id, service_id, city_id, zone_id, starts_at, ends_at, duration_minutes, workers_needed (1 to 50), address_line, landmark, answers, details, budget_paise, status, owner_user_id, first_response_due_at, first_responded_at, booking_id, closed_reason, timestamps | Milestone 2. Status guard trigger. |
+| `service_request_events` | id, request_id, from_status, to_status, actor_user_id, actor_role, data, at | Append-only (trigger). Owner changes are recorded in `data`. |
+| `quotes` | id, request_id, version, status, workers_count, starts_at, ends_at, duration_minutes, hourly_rate_paise, price_snapshot, total_paise, pricing_version, proposed_worker_ids, message_to_customer, customer_note, expires_at, sent_at, responded_at, booking_id, created_by, timestamps; unique (request_id, version); one draft or sent per request | Milestone 2. Guard trigger keeps sent quotes unchanged and closed quotes final; no deletes. The snapshot's customer lines are the quote lines. |
 | `notification_outbox` | id, channel, user_id, template, payload, idempotency_key (unique), status, attempts, last_error, created_at, sent_at | Never sent twice. |
 | `jobs` | id, kind, run_at, status, attempts, last_error, dedupe_key (unique), payload | |
 | `waitlist_entries` | id, city_id, service_id, name, phone_e164, need, wanted_on, created_at | Section 17. |
@@ -142,6 +146,9 @@ Helper functions: `app_user_id()`, `app_has_role(text)`, `app_is_staff()` (admin
 | `sessions`, `otp_challenges` | system only (auth runs in system context) | system only |
 | `bookings` | customer owner; worker with an assignment on it; staff; system | customer owner (create); system and staff (status changes run through services in system or staff context) |
 | `booking_assignments`, `booking_events` | as the parent booking | system, staff |
+| `service_requests`, `service_request_events` | the customer who made it; staff; system | customer (insert as `submitted`, and events on their own request); staff and system (status changes) |
+| `quotes` | the request's customer, except drafts; staff; system | staff, system |
+| `customer_id_checks` | the customer; verifier, admin, system | the customer (insert as `pending`); verifier, admin, system (review) |
 | `payments`, `payment_webhook_events`, `ledger_*`, `journal_entries` | finance, admin, system; customer for own booking payments; worker for own `worker_payable` lines | system only |
 | `chat_messages` | booking participants (blocked rows: sender only), staff | booking participants (insert), system |
 | `worker_documents` | the worker, verifier, admin, system | the worker (insert), verifier, admin, system |
@@ -161,6 +168,6 @@ Agency and corporate isolation (Milestones 5 and later) extends these policies w
 - `ledger_lines (account_id)`, `journal_entries (booking_id)`.
 - `chat_messages (booking_id, created_at)`.
 
-## 6. Later entities (outlined, not built in Milestone 1)
+## 6. Later entities (outlined, not built yet)
 
-Service requests, quotes and quote lines (M07, M08, Milestone 2); refunds, disputes, payouts and settlements (M13, M19, Milestone 3); incidents, SOS events, check-ins and location shares (M19, Milestone 3); masked call sessions (M16); agency allocations and settlements (M11); corporate accounts, bookers, budgets and approvals (M12); CRM leads, follow-ups and templates (M15); subscriptions (M14).
+Refunds, disputes, payouts and settlements (M13, M19, Milestone 3); incidents, SOS events, check-ins and location shares (M19, Milestone 3); masked call sessions (M16); agency allocations and settlements (M11); corporate accounts, bookers, budgets and approvals (M12); CRM leads, follow-ups and templates (M15); subscriptions (M14).

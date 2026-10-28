@@ -46,6 +46,8 @@ Sign in with these numbers and code `123456`. The fixed code works only for numb
 | +91 90000 00002 | customer (code of conduct accepted, ID already verified so in-home services can be booked) |
 | +91 90000 00003 | worker: verified driver in three Delhi zones |
 
+To try a team booking (Milestone 2): as the customer, open any service page in Delhi and choose "Ask for a quote", for example 3 event staff. As the admin, open Operations, then "Requests and quotes": take the request, tick the people to propose, save the draft and send it. As the customer, accept and pay the quote on the request page. Places you did not fill show under Bookings with the filter "Places still to fill", where you assign the rest.
+
 The seed also creates twelve sample workers per service across Delhi NCR ("Sample Driver 01", "Sample Caregiver 01", "Sample Nurse 01" and so on), so every Delhi, Noida and Gurugram service page passes the go-live threshold locally and on staging. They are not real people, have no document files and cannot sign in. Any other number gets a random code printed in the server log.
 
 ## Commands

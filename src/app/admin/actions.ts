@@ -3,6 +3,11 @@
 import { revalidatePath } from 'next/cache';
 import { activateWorker, reviewDocument, reviewServiceApplication } from '@/modules/workers/service';
 import { reviewIdCheck } from '@/modules/identity/id-check';
+import { assignWorkerToBooking, releaseWorkerFromBooking } from '@/modules/bookings/team';
+import { cancelRequestAsStaff, claimRequest, reopenRequest, saveQuoteDraft, sendQuote, setRequestStage, withdrawQuote } from '@/modules/requests/assisted';
+import { formatInr } from '@/modules/pricing/engine';
+import { formatIst } from '@/platform/time';
+import type { Ctx } from '@/platform/db/client';
 import { setServiceCityStatus, updateServiceCityPricing } from '@/modules/catalog/service';
 import { pricingConfigSchema } from '@/modules/catalog/config';
 import { setWaitlistStatus, type FollowUpStatus } from '@/modules/seo/service';
@@ -98,4 +103,102 @@ export async function reviewIdCheckAction(_: ActionState, fd: FormData): Promise
   });
   revalidatePath('/admin', 'layout');
   return state;
+}
+
+// ---------- Team bookings ----------
+
+export async function assignWorkerAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  const state = await runAction(async () => {
+    const { ctx } = await pageSession();
+    const out = await assignWorkerToBooking(ctx, { bookingId: str(fd, 'bookingId'), workerId: str(fd, 'workerId') });
+    return `Assigned. ${out.filled} of ${out.needed} places filled.`;
+  });
+  revalidatePath('/admin', 'layout');
+  return state;
+}
+
+export async function releaseWorkerAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  const state = await runAction(async () => {
+    const { ctx } = await pageSession();
+    await releaseWorkerFromBooking(ctx, { bookingId: str(fd, 'bookingId'), workerId: str(fd, 'workerId'), reason: str(fd, 'reason') });
+    return 'Taken off the booking. The place is now empty.';
+  });
+  revalidatePath('/admin', 'layout');
+  return state;
+}
+
+// ---------- Requests and quotes ----------
+
+function requestAction(fn: (ctx: Ctx, fd: FormData) => Promise<string>) {
+  return async (fd: FormData): Promise<ActionState> => {
+    const state = await runAction(async () => {
+      const { ctx } = await pageSession();
+      return fn(ctx, fd);
+    });
+    revalidatePath('/admin', 'layout');
+    return state;
+  };
+}
+
+const claim = requestAction(async (ctx, fd) => {
+  await claimRequest(ctx, str(fd, 'requestId'));
+  return 'You own this request now.';
+});
+export async function claimRequestAction(_: ActionState, fd: FormData) {
+  return claim(fd);
+}
+
+const stage = requestAction(async (ctx, fd) => {
+  await setRequestStage(ctx, { requestId: str(fd, 'requestId'), to: str(fd, 'to') === 'sourcing' ? 'sourcing' : 'in_review' });
+  return 'Status updated.';
+});
+export async function setRequestStageAction(_: ActionState, fd: FormData) {
+  return stage(fd);
+}
+
+const cancelReq = requestAction(async (ctx, fd) => {
+  await cancelRequestAsStaff(ctx, { requestId: str(fd, 'requestId'), reason: str(fd, 'reason') });
+  return 'Request cancelled.';
+});
+export async function cancelRequestStaffAction(_: ActionState, fd: FormData) {
+  return cancelReq(fd);
+}
+
+const reopen = requestAction(async (ctx, fd) => {
+  await reopenRequest(ctx, str(fd, 'requestId'));
+  return 'Request reopened.';
+});
+export async function reopenRequestAction(_: ActionState, fd: FormData) {
+  return reopen(fd);
+}
+
+const draft = requestAction(async (ctx, fd) => {
+  const out = await saveQuoteDraft(ctx, {
+    requestId: str(fd, 'requestId'),
+    workersCount: str(fd, 'workersCount'),
+    durationMinutes: str(fd, 'durationMinutes'),
+    hourlyRateRupees: str(fd, 'hourlyRateRupees'),
+    proposedWorkerIds: fd.getAll('proposedWorkerIds').map(String),
+    messageToCustomer: str(fd, 'messageToCustomer') || undefined,
+  });
+  return `Draft saved. Customer total ${formatInr(out.totalPaise)}.`;
+});
+export async function saveQuoteDraftAction(_: ActionState, fd: FormData) {
+  return draft(fd);
+}
+
+const send = requestAction(async (ctx, fd) => {
+  const out = await sendQuote(ctx, str(fd, 'quoteId'));
+  return `Quote sent. Valid until ${formatIst(out.expiresAt)}.`;
+});
+export async function sendQuoteAction(_: ActionState, fd: FormData) {
+  return send(fd);
+}
+
+const withdraw = requestAction(async (ctx, fd) => {
+  await withdrawQuote(ctx, { quoteId: str(fd, 'quoteId'), reason: str(fd, 'reason') });
+  return 'Quote withdrawn.';
+});
+export async function withdrawQuoteAction(_: ActionState, fd: FormData) {
+  return withdraw(fd);
 }

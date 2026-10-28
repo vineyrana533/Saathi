@@ -10,8 +10,10 @@ import { requireAnyRole, STAFF } from '../../_lib/session';
 export default async function AdminBookings({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const { ctx } = await requireAnyRole(STAFF, '/admin/bookings');
   const sp = await searchParams;
-  const res = await listBookingsForAdmin(ctx, { status: sp.status || undefined, q: sp.q || undefined, page: Number(sp.page) || 1 });
-  const qs = (p: number) => `/admin/bookings?${new URLSearchParams({ ...(sp.status ? { status: sp.status } : {}), ...(sp.q ? { q: sp.q } : {}), page: String(p) })}`;
+  const needsPeople = sp.people === 'missing';
+  const res = await listBookingsForAdmin(ctx, { status: sp.status || undefined, q: sp.q || undefined, page: Number(sp.page) || 1, needsPeople });
+  const qs = (p: number) =>
+    `/admin/bookings?${new URLSearchParams({ ...(sp.status ? { status: sp.status } : {}), ...(sp.q ? { q: sp.q } : {}), ...(needsPeople ? { people: 'missing' } : {}), page: String(p) })}`;
   return (
     <>
       <h1 className="font-display text-h1 font-bold">Bookings</h1>
@@ -31,6 +33,13 @@ export default async function AdminBookings({ searchParams }: { searchParams: Pr
             ))}
           </Select>
         </label>
+        <label className="flex flex-col gap-1 text-small font-semibold">
+          People
+          <Select name="people" defaultValue={sp.people ?? ''} className="w-56">
+            <option value="">Any</option>
+            <option value="missing">Places still to fill</option>
+          </Select>
+        </label>
         <button className="min-h-12 rounded-xs border border-ink px-5 font-semibold hover:bg-paper-2">Filter</button>
       </form>
       {res.rows.length === 0 ? (
@@ -44,7 +53,7 @@ export default async function AdminBookings({ searchParams }: { searchParams: Pr
                 <th className="py-2">When</th>
                 <th className="py-2">Service and area</th>
                 <th className="py-2">Customer</th>
-                <th className="py-2">Worker</th>
+                <th className="py-2">People</th>
                 <th className="py-2">Status</th>
                 <th className="py-2 text-right">Total</th>
               </tr>
@@ -62,7 +71,16 @@ export default async function AdminBookings({ searchParams }: { searchParams: Pr
                     {b.serviceName}, {b.zoneName}, {b.cityName}
                   </td>
                   <td className="py-3">{b.customerName ?? 'Unnamed'}</td>
-                  <td className="py-3">{b.workerName ?? 'None'}</td>
+                  <td className="py-3">
+                    {b.workersNeeded > 1 || b.assigned < b.workersNeeded ? (
+                      <span className={b.assigned < b.workersNeeded && ['pending_payment', 'confirmed'].includes(b.status) ? 'font-semibold text-warning' : ''}>
+                        {b.assigned} of {b.workersNeeded}
+                        {b.workerName ? `: ${b.workerName}` : ''}
+                      </span>
+                    ) : (
+                      b.workerName ?? 'None'
+                    )}
+                  </td>
                   <td className="py-3">
                     <StatusPill status={b.status} />
                   </td>

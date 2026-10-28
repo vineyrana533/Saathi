@@ -46,6 +46,8 @@ export const bookings = pgTable(
     priceSnapshot: jsonb('price_snapshot').$type<PriceSnapshot>().notNull(),
     totalPaise: bigint('total_paise', { mode: 'number' }).notNull(),
     pricingVersion: integer('pricing_version').notNull(),
+    /** People paid for. Active assignments below this number is a partial fill that ops must fix. */
+    workersNeeded: integer('workers_needed').notNull().default(1),
     holdExpiresAt: timestamp('hold_expires_at', { withTimezone: true }),
     startOtpHash: text('start_otp_hash'),
     endOtpHash: text('end_otp_hash'),
@@ -71,6 +73,7 @@ export const bookings = pgTable(
     ),
     check('bookings_time_chk', sql`${t.startsAt} < ${t.endsAt}`),
     check('bookings_total_chk', sql`${t.totalPaise} >= 0`),
+    check('bookings_workers_chk', sql`${t.workersNeeded} between 1 and 50`),
   ],
 );
 

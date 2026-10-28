@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import { t } from '@/i18n';
 import { getBookingForViewer } from '@/modules/bookings/service';
 import { listChatMessages } from '@/modules/chat/service';
-import { myRatingFor } from '@/modules/reviews/service';
+import { myRatingFor, workersIRated } from '@/modules/reviews/service';
 import { formatInr } from '@/modules/pricing/engine';
 import { formatIst } from '@/platform/time';
 import { isAppError } from '@/platform/errors';
@@ -27,7 +27,9 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
     if (isAppError(e) && (e.status === 404 || e.status === 403)) notFound();
     throw e;
   }
-  const [messages, myRating] = await Promise.all([listChatMessages(ctx, id), myRatingFor(ctx, id)]);
+  const [messages, myRating, rated] = await Promise.all([listChatMessages(ctx, id), myRatingFor(ctx, id), workersIRated(ctx, id)]);
+  const team = b.workersNeeded > 1;
+  const toRate = b.viewer === 'customer' ? b.workers.filter((w) => !rated.includes(w.id)) : [];
   const chatOpen = ['pending_payment', 'confirmed', 'in_progress', 'completed'].includes(b.status);
   const canCancel = b.viewer === 'customer' && (b.status === 'pending_payment' || b.status === 'confirmed');
   const fee = b.cancelFeeNowPaise;
@@ -58,13 +60,24 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
           {b.codes.end && <CodePanel title={t('booking.endCodeTitle')} help={t('booking.endCodeHelp')} code={b.codes.end} />}
 
           <dl className="border-t border-ink">
-            {b.worker && (
+            {(b.workers.length > 0 || team) && (
               <div className="grid grid-cols-3 gap-4 border-b border-rule py-3">
-                <dt className="text-ink-2">{t('booking.driver')}</dt>
-                <dd className="col-span-2 font-semibold">
-                  <Link className="link" href={`/workers/${b.worker.id}`}>
-                    {b.worker.name}
-                  </Link>
+                <dt className="text-ink-2">{team ? t('booking.teamSize', { n: b.workersNeeded }) : t('booking.driver')}</dt>
+                <dd className="col-span-2">
+                  <ul>
+                    {b.workers.map((w) => (
+                      <li key={w.id} className="font-semibold">
+                        <Link className="link" href={`/workers/${w.id}`}>
+                          {w.name}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                  {team && ['pending_payment', 'confirmed'].includes(b.status) && b.workers.length < b.workersNeeded && (
+                    <p className="mt-1 text-small text-ink-2">
+                      {b.workers.length === 0 ? t('booking.teamArranging') : t('booking.teamPartial', { filled: b.workers.length, needed: b.workersNeeded })}
+                    </p>
+                  )}
                 </dd>
               </div>
             )}
@@ -79,8 +92,10 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
 
           <ChatPanel bookingId={b.id} messages={messages} open={chatOpen} action={sendChatAction} />
 
-          {b.status === 'completed' && b.worker && !myRating && <RatingForm bookingId={b.id} name={b.worker.name} action={rateAction} />}
-          {myRating && <Notice tone="success">{t('booking.rated')}</Notice>}
+          {b.status === 'completed' && b.viewer === 'customer' &&
+            toRate.map((w) => <RatingForm key={w.id} bookingId={b.id} workerId={w.id} name={w.name} action={rateAction} />)}
+          {b.status === 'completed' && b.viewer === 'worker' && !myRating && <RatingForm bookingId={b.id} name={b.customerName ?? t('booking.customer')} action={rateAction} />}
+          {myRating && toRate.length === 0 && <Notice tone="success">{t('booking.rated')}</Notice>}
 
           {canCancel && (
             <section aria-labelledby="cancel-title" className="border-t border-ink pt-6">

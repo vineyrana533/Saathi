@@ -1,6 +1,6 @@
 # Booking lifecycle and state machines
 
-Status: Specification Complete. Booking, assignment and payment machines are implemented in Milestone 1; the rest are specified for later milestones. Last updated 27 October 2026.
+Status: Specification Complete. Booking, assignment and payment machines are implemented in Milestone 1; service requests, quotes and team bookings in Milestone 2; the rest are specified for later milestones. Last updated 28 October 2026.
 
 **Built in Milestone 1:** create, payment capture, hold expiry, start, finish, and cancellation by customer, worker (including "I feel unsafe", without penalty) or staff with the policy fee and a cancellation journal. **Not built yet (Milestone 3):** marking no-shows, worker strikes, alerting ops and finding a replacement after a worker cancels, refund execution, disputes. Rows below marked (M3) describe that target behaviour.
 
@@ -51,7 +51,9 @@ OTP rules: 4-digit codes generated with a cryptographic RNG, stored as HMAC hash
 | (none) | active | booking created or quote accepted | system (inside booking transaction) |
 | active | released | booking expired, cancelled, no-show, or reassigned | system, staff |
 
-Only `active` rows take part in the overlap constraint. Reassignment (Milestone 2 and 3) releases the old row and inserts a new one in one transaction.
+Only `active` rows take part in the overlap constraint. Reassignment releases the old row and inserts a new one.
+
+**Team bookings (Milestone 2).** A booking pays for `workers_needed` places, each an `active` assignment. Fewer active assignments than places is a partial fill: visible to ops, shown to the customer, and the job cannot start until it is fixed. Ops assign or take people off before the start (`booking.assign`). A worker who cancels a team booking releases only their own assignment. Completion pays each assigned person the snapshot's per-person net.
 
 ## 3. Payment
 
@@ -91,9 +93,13 @@ The price snapshot stored on the booking lists exactly these amounts, so the pri
 
 `submitted` to `in_review` (ops picks up) to `sourcing` (ops contacting providers) to `quoted` (one or more quotes sent) to `accepted` (customer accepts a quote, booking created) or `declined` (customer) or `expired` (no acceptance before deadline) or `cancelled` (customer or ops). Each request has an owner, a first-response deadline (2 business hours, config) and assignment history.
 
+Built in Milestone 2. Allowed transitions, enforced by a trigger as well as the service: submitted to in_review, sourcing or quoted; in_review to sourcing or quoted; sourcing to in_review or quoted; quoted to in_review (customer asks for changes, or ops withdraws the quote), accepted (payment captured, system) or declined; any open status to cancelled (customer or staff, reason required) or expired (system: the sent quote expired, or the start time passed); expired to in_review (staff reopen, only if the job is more than an hour away). Every change writes a `service_request_events` row (append-only) and an audit entry. The first move out of `submitted` by staff records the first response.
+
 ## 6. Quote (Milestone 2)
 
 `draft` (ops) to `sent` (ops) to `accepted` (customer, before expiry; creates booking with snapshot), `change_requested` (customer, returns to `draft` as a new version), `declined` (customer) or `expired` (system after 48 hours, config). Accepted quotes are immutable.
+
+Built in Milestone 2, with one more status: `withdrawn` (ops takes back a draft or sent quote). At most one draft or sent quote per request (unique index). A sent quote cannot be edited (trigger); a quote that has left draft or sent never changes. Accepting creates a `pending_payment` booking at the quote's exact snapshot and assigns the proposed people who are still free; the quote and request become `accepted` in the same transaction as the payment capture. Expiry is checked before every read and action, and by the daily sweep; a quote whose payment window is still open is not expired until that window closes.
 
 ## 7. Refund (Milestone 3)
 

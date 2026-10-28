@@ -23,7 +23,8 @@ export const ratings = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    uniqueIndex('ratings_booking_direction_uq').on(t.bookingId, t.direction),
+    // One rating per pair of people per booking, so a team booking gets one rating per worker.
+    uniqueIndex('ratings_booking_pair_uq').on(t.bookingId, t.raterUserId, t.rateeUserId),
     check('ratings_direction_chk', sql`${t.direction} in ('customer_to_worker','worker_to_customer')`),
     check('ratings_score_chk', sql`${t.score} between 1 and 5`),
     check('ratings_status_chk', sql`${t.status} in ('visible','pending_review','hidden')`),

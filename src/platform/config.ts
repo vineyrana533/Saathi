@@ -16,6 +16,22 @@ const DEFS = {
   'booking.otp_max_attempts': { schema: z.number().int().min(3).max(10), fallback: 5 },
   'quality.low_rating_threshold': { schema: z.number().int().min(1).max(5), fallback: 2 },
   'payouts.dispute_window_hours': { schema: z.number().int().min(0), fallback: 48 },
+  'booking.lead_time_minutes': {
+    schema: z.object({ direct: z.number().int().min(0), assisted: z.number().int().min(0) }),
+    fallback: { direct: 180, assisted: 1440 },
+  },
+  'quote.validity_hours': { schema: z.number().int().min(1).max(168), fallback: 48 },
+  /** Minutes of business time before a new request must get its first response. */
+  'request.first_response_minutes': { schema: z.number().int().min(15).max(2880), fallback: 120 },
+  /** IST working window; weekdays 0 = Monday. */
+  business_hours: {
+    schema: z.object({
+      startMinute: z.number().int().min(0).max(1439),
+      endMinute: z.number().int().min(1).max(1440),
+      weekdays: z.array(z.number().int().min(0).max(6)).min(1),
+    }),
+    fallback: { startMinute: 540, endMinute: 1140, weekdays: [0, 1, 2, 3, 4, 5] },
+  },
 } as const;
 
 export type ConfigKey = keyof typeof DEFS;

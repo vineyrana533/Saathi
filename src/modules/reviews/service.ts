@@ -14,10 +14,13 @@ import { getConfig } from '@/platform/config';
 export const ratingInput = z.object({
   score: z.coerce.number().int().min(1, 'Pick 1 to 5 stars').max(5),
   comment: z.string().trim().max(500).optional(),
+  /** Which person a customer is rating; needed on team bookings. */
+  workerId: z.string().uuid().optional(),
 });
 
 /**
- * Two-way ratings (M20). Allowed once per direction, only after completion.
+ * Two-way ratings (M20). Allowed once per pair of people, only after completion: on a team booking
+ * the customer rates each person and each person rates the customer.
  * Low scores go to quality review; comments that fail the content scan are held.
  */
 export async function rateBooking(ctx: Ctx, bookingId: string, raw: z.infer<typeof ratingInput>) {
@@ -27,16 +30,17 @@ export async function rateBooking(ctx: Ctx, bookingId: string, raw: z.infer<type
     const [b] = await tx.select().from(bookings).where(eq(bookings.id, bookingId)).limit(1);
     if (!b) throw notFound('Booking');
     if (b.status !== 'completed') throw conflict('not_completed', 'You can rate a booking after it is completed');
-    const [a] = await tx
+    const team = await tx
       .select({ workerId: workerProfiles.id, workerUserId: workerProfiles.userId })
       .from(bookingAssignments)
       .innerJoin(workerProfiles, eq(workerProfiles.id, bookingAssignments.workerId))
-      .where(and(eq(bookingAssignments.bookingId, b.id), eq(bookingAssignments.status, 'active')))
-      .limit(1);
+      .where(and(eq(bookingAssignments.bookingId, b.id), eq(bookingAssignments.status, 'active')));
+    const asCustomer = b.customerUserId === ctx.userId;
+    const a = asCustomer
+      ? input.workerId ? team.find((w) => w.workerId === input.workerId) : team.length === 1 ? team[0] : undefined
+      : team.find((w) => w.workerUserId === ctx.userId);
     if (!a) throw notFound('Booking');
-    const direction =
-      b.customerUserId === ctx.userId ? 'customer_to_worker' : a.workerUserId === ctx.userId ? 'worker_to_customer' : null;
-    if (!direction) throw notFound('Booking');
+    const direction = asCustomer ? 'customer_to_worker' : 'worker_to_customer';
 
     const lowThreshold = await getConfig(tx, 'quality.low_rating_threshold');
     const scan = input.comment ? scanText(input.comment) : { action: 'allow' as const, reasons: [] };
@@ -54,7 +58,7 @@ export async function rateBooking(ctx: Ctx, bookingId: string, raw: z.infer<type
       })
       .onConflictDoNothing()
       .returning({ id: ratings.id });
-    if (!inserted.length) throw conflict('already_rated', 'You have already rated this booking');
+    if (!inserted.length) throw conflict('already_rated', 'You have already rated this person for this booking');
 
     if (input.score <= lowThreshold || status !== 'visible') {
       await tx.insert(moderationFlags).values({
@@ -91,6 +95,19 @@ export async function myRatingFor(ctx: Ctx, bookingId: string) {
       .where(and(eq(ratings.bookingId, bookingId), eq(ratings.raterUserId, ctx.userId ?? '00000000-0000-0000-0000-000000000000')))
       .limit(1);
     return r ?? null;
+  });
+}
+
+/** Worker profile ids the signed-in customer has already rated on this booking. */
+export async function workersIRated(ctx: Ctx, bookingId: string) {
+  return withDb(ctx, async (tx) => {
+    const rows = await tx
+      .select({ workerId: workerProfiles.id })
+      .from(ratings)
+      .innerJoin(workerProfiles, eq(workerProfiles.userId, ratings.rateeUserId))
+      .where(and(eq(ratings.bookingId, bookingId), eq(ratings.raterUserId, ctx.userId ?? '00000000-0000-0000-0000-000000000000'),
+        eq(ratings.direction, 'customer_to_worker')));
+    return rows.map((r) => r.workerId);
   });
 }
 

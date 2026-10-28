@@ -12,6 +12,7 @@ export const LIMITS = {
   otpRequestPerIp: { limit: 10, windowSeconds: 3600 },
   otpVerifyPerPhone: { limit: 10, windowSeconds: 600 },
   bookingCreatePerUser: { limit: 10, windowSeconds: 3600 },
+  requestCreatePerUser: { limit: 5, windowSeconds: 3600 },
   searchPerIp: { limit: 60, windowSeconds: 60 },
   chatPerUser: { limit: 30, windowSeconds: 60 },
   waitlistPerIp: { limit: 5, windowSeconds: 3600 },

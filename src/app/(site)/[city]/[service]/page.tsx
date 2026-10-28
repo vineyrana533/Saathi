@@ -233,6 +233,14 @@ export default async function CityServicePage({ params }: { params: Promise<Para
                 <Notice tone="info">{page.service.summary}</Notice>
               </div>
             )}
+            {/* Assisted requests work wherever the city is open, even before the service has enough people for instant booking. */}
+            {page.city.status === 'live' && page.service.status === 'active' && (page.service.riskTier === 'A' || page.flagEnabled) && (
+              <p className="mt-6 border-t border-rule pt-4">
+                <Link className="link font-semibold" href={`/requests/new?service=${service}&city=${city}`}>
+                  {t('requests.newLink')}
+                </Link>
+              </p>
+            )}
           </div>
         </div>
       </Container>

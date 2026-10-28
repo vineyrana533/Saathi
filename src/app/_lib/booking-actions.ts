@@ -42,7 +42,7 @@ export async function rateAction(_: ActionState, fd: FormData): Promise<ActionSt
   const bookingId = str(fd, 'bookingId');
   const state = await runAction(async () => {
     const { ctx } = await pageSession();
-    await rateBooking(ctx, bookingId, { score: Number(str(fd, 'score')), comment: str(fd, 'comment') || undefined });
+    await rateBooking(ctx, bookingId, { score: Number(str(fd, 'score')), comment: str(fd, 'comment') || undefined, workerId: str(fd, 'workerId') || undefined });
     return t('booking.rated');
   });
   refresh(bookingId);
