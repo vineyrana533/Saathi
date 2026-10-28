@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { t } from '@/i18n';
-import { getMyWorkerProfile } from '@/modules/workers/service';
+import { getMyWorkerProfile, listApplicableServices } from '@/modules/workers/service';
 import { listWorkerJobs } from '@/modules/bookings/service';
 import { formatIst } from '@/platform/time';
 import { StatusPill } from '@/ui/booking-parts';
@@ -15,10 +15,13 @@ export default async function WorkerHome() {
   const jobs = await listWorkerJobs(ctx);
   const p = mine.profile;
   const hasDoc = (type: string) => mine.documents.some((d) => d.docType === type && d.status !== 'rejected');
+  // Basic documents plus whatever the services this worker applied for need.
+  const applied = new Set(mine.approvals.map((a) => a.serviceSlug));
+  const neededDocs = ['police_certificate', 'id_proof', 'profile_photo', ...(await listApplicableServices()).filter((s) => applied.has(s.slug)).flatMap((s) => s.documents)];
   const steps = [
     { label: t('worker.stepProfile'), done: mine.zoneIds.length > 0, href: '/worker/profile' },
-    { label: t('worker.stepDocuments'), done: ['driving_licence', 'police_certificate', 'id_proof', 'profile_photo'].every(hasDoc), href: '/worker/documents' },
     { label: t('worker.stepService'), done: mine.approvals.length > 0, href: '/worker/documents#services' },
+    { label: t('worker.stepDocuments'), done: neededDocs.every(hasDoc), href: '/worker/documents' },
     { label: t('worker.stepHours'), done: mine.hours.length > 0, href: '/worker/availability' },
   ];
   const statusLabel = p.status === 'active' ? t('worker.statusActive') : p.status === 'suspended' ? t('worker.statusSuspended') : t('worker.statusApplicant');

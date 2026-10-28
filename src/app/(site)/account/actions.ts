@@ -4,6 +4,8 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { revokeSession, updateMyProfile, acceptConsent } from '@/modules/identity/service';
+import { submitIdCheck } from '@/modules/identity/id-check';
+import { invalid } from '@/platform/errors';
 import { SESSION_COOKIE } from '@/platform/http';
 import { runAction, str } from '../../_lib/actions';
 import { pageSession } from '../../_lib/session';
@@ -19,6 +21,22 @@ export async function saveAccountAction(_: ActionState, fd: FormData): Promise<A
       gender: str(fd, 'gender') as '' | 'female',
     });
     return t('account.saved');
+  });
+  revalidatePath('/account');
+  return state;
+}
+
+export async function submitIdCheckAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  const state = await runAction(async () => {
+    const { ctx } = await pageSession();
+    const file = fd.get('file');
+    if (!(file instanceof File) || file.size === 0) throw invalid('empty_file', 'Choose a file to upload', { field: 'file' });
+    await submitIdCheck(
+      ctx,
+      { idType: str(fd, 'idType'), numberLast4: str(fd, 'numberLast4'), consent: fd.get('consent') === 'on' },
+      { bytes: Buffer.from(await file.arrayBuffer()), declaredType: file.type },
+    );
+    return t('account.idSent');
   });
   revalidatePath('/account');
   return state;

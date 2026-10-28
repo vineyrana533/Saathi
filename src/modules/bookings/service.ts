@@ -13,6 +13,7 @@ import { supplyStatus } from '../seo/supply';
 import { postJournal } from '../payments/ledger';
 import { enqueueNotification } from '../notifications/service';
 import { CONSENT_VERSIONS } from '../identity/service';
+import { hasVerifiedId } from '../identity/id-check';
 import { consents } from '../identity/schema';
 import { anonymousCtx, asSystem, pgCode, PG_EXCLUSION_VIOLATION, withDb, type Ctx, type Tx } from '@/platform/db/client';
 import { requirePermission, isStaff } from '@/platform/auth/permissions';
@@ -101,8 +102,8 @@ export async function createBooking(ctx: Ctx, raw: CreateBookingInput) {
 
       const s = await loadServiceInCity(tx, input.serviceSlug, input.citySlug);
       if (!s) throw notFound('Service');
-      if (s.service.config.customerVerification === 'id') {
-        throw conflict('customer_id_required', 'This service needs a verified ID, which is not available yet');
+      if (s.service.config.customerVerification === 'id' && !(await hasVerifiedId(tx, ctx.userId!))) {
+        throw conflict('customer_id_required', 'This service needs a verified ID. Add your ID in your account first.');
       }
       const supply = await supplyStatus(tx, ctx, s);
       if (!supply.live) throw conflict('not_live', `${s.service.name} is not open for booking in ${s.city.name} yet`);

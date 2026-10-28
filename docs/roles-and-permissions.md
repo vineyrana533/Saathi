@@ -35,6 +35,8 @@ Legend: **Y** allowed, **Own** only rows the user owns or is party to, **Org** o
 | `worker.documents.read` | | Own | Y | | | | Y | | |
 | `worker.verify` (approve or reject documents and categories) | | | Y | | | | Y | | |
 | `worker.availability.manage` | | Own | | Y | | | Y | Org | |
+| `customer.id.submit` (ID check for Tier B and C bookings) | Own | | | | | | | | |
+| `customer.id.review` (approve or reject customer IDs; every file view logged) | | | Y | | | | Y | | |
 | `booking.create` | Y | | | Y | | | Y | | Y |
 | `booking.read` | Own | Own | | Y | Y | Y | Y | Org | Org |
 | `booking.cancel` | Own | Own | | Y | | | Y | | Org |

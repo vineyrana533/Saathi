@@ -16,12 +16,11 @@ export const metadata: Metadata = {
 
 export default async function HomePage() {
   const pairs = await listServiceCityPairs();
-  // Tier A services that are active, plus Tier C services shown as "coming later". Tier B stays hidden while its flag is off.
-  const services = new Map<string, { slug: string; name: string; summary: string; tier: string; live: string[]; rate: number | null }>();
+  // Every active service, Tier C included since T-31. Tier B stays hidden while its status is disabled.
+  const services = new Map<string, { slug: string; name: string; summary: string; live: string[]; rate: number | null }>();
   for (const p of pairs) {
-    const shown = (p.riskTier === 'A' && p.serviceStatus === 'active') || p.riskTier === 'C';
-    if (!shown) continue;
-    const s = services.get(p.serviceSlug) ?? { slug: p.serviceSlug, name: p.serviceName, summary: p.serviceSummary, tier: p.riskTier, live: [], rate: null };
+    if (p.serviceStatus !== 'active') continue;
+    const s = services.get(p.serviceSlug) ?? { slug: p.serviceSlug, name: p.serviceName, summary: p.serviceSummary, live: [], rate: null };
     if (p.status === 'live') s.live.push(p.cityName);
     const rate = (p.pricing as { hourlyRatePaise?: number }).hourlyRatePaise ?? null;
     if (rate != null && (s.rate == null || rate < s.rate)) s.rate = rate;
@@ -90,10 +89,9 @@ export default async function HomePage() {
               name: s.name,
               summary: s.summary,
               href: `/delhi/${s.slug}`,
-              statusTone: s.tier === 'C' ? 'neutral' : s.live.length ? 'success' : 'warning',
-              statusLabel: s.tier === 'C' ? t('home.comingLater') : s.live.length ? t('home.bookableIn', { cities: s.live.join(', ') }) : t('home.comingSoon'),
-              // No price is shown for Tier C: nothing has been priced yet.
-              priceLabel: s.tier !== 'C' && s.rate ? t('home.fromPrice', { price: formatInr(s.rate) }) : null,
+              statusTone: s.live.length ? 'success' : 'warning',
+              statusLabel: s.live.length ? t('home.bookableIn', { cities: s.live.join(', ') }) : t('home.comingSoon'),
+              priceLabel: s.rate ? t('home.fromPrice', { price: formatInr(s.rate) }) : null,
             }))}
             other={{ title: t('home.otherTitle'), body: t('home.otherBody'), cta: t('home.otherCta'), href: '/request' }}
           />

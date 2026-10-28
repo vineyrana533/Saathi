@@ -14,10 +14,26 @@ if (!ownerUrl) {
 }
 const local = /@localhost[:/]/.test(ownerUrl);
 
+/** True if the app connection string already logs in, so the password needs no reset. */
+async function appLoginWorks(appUrl: string | undefined) {
+  if (!appUrl) return false;
+  const sql = postgres(appUrl, { max: 1, prepare: false, onnotice: () => {}, connect_timeout: 10 });
+  try {
+    await sql`select 1`;
+    return true;
+  } catch {
+    return false;
+  } finally {
+    await sql.end();
+  }
+}
+
 async function main() {
   await runMigrations({ ownerUrl: ownerUrl!, appUrl: process.env.DATABASE_URL, setAppPassword: local });
   const appPassword = process.env.SAATHI_APP_PASSWORD;
-  if (!local && appPassword) {
+  // Re-setting an unchanged password makes the Supabase pooler refuse new app logins for a few
+  // seconds, which the live site would feel, so only set it when the current one fails.
+  if (!local && appPassword && !(await appLoginWorks(process.env.DATABASE_URL))) {
     if (!/^[A-Za-z0-9_-]{20,}$/.test(appPassword)) throw new Error('SAATHI_APP_PASSWORD must be 20+ chars of [A-Za-z0-9_-]');
     const sql = postgres(ownerUrl!, { max: 1, onnotice: () => {} });
     try {

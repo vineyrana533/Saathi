@@ -43,10 +43,10 @@ Sign in with these numbers and code `123456`. The fixed code works only for numb
 | Phone | Roles |
 |---|---|
 | +91 90000 00001 | admin, ops, verifier, finance |
-| +91 90000 00002 | customer (code of conduct already accepted) |
+| +91 90000 00002 | customer (code of conduct accepted, ID already verified so in-home services can be booked) |
 | +91 90000 00003 | worker: verified driver in three Delhi zones |
 
-The seed also creates twelve drivers named "Sample Driver 01" to "Sample Driver 12" across Delhi NCR, so the Delhi, Noida and Gurugram driver pages pass the go-live threshold locally. They are not real people and have no document files. Any other number gets a random code printed in the server log.
+The seed also creates twelve sample workers per service across Delhi NCR ("Sample Driver 01", "Sample Caregiver 01", "Sample Nurse 01" and so on), so every Delhi, Noida and Gurugram service page passes the go-live threshold locally and on staging. They are not real people, have no document files and cannot sign in. Any other number gets a random code printed in the server log.
 
 ## Commands
 
@@ -109,7 +109,7 @@ All staging settings live in `.env.staging.local` on the operator's machine (git
 
 ```bash
 pnpm tsx --env-file=.env.staging.local scripts/migrate.ts        # apply new migrations to staging
-pnpm tsx --env-file=.env.staging.local scripts/seed.ts           # reference data, test accounts, sample drivers
+pnpm tsx --env-file=.env.staging.local scripts/seed.ts           # reference data, test accounts, sample workers
 pnpm tsx --env-file=.env.staging.local scripts/setup-storage.ts  # create and check the documents bucket
 node scripts/vercel-staging.mjs env                              # copy runtime settings to Vercel
 node scripts/vercel-staging.mjs deploy                           # redeploy from GitHub main

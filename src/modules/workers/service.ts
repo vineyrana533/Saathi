@@ -14,7 +14,8 @@ import { DOCUMENT_TYPES, serviceConfigSchema } from '../catalog/config';
 import { zones, cities } from '../geo/schema';
 import { scanText, explainBlock } from '../chat/moderation';
 import { moderationFlags } from '../chat/schema';
-import { asSystem, withDb, type Ctx, type Tx } from '@/platform/db/client';
+import { featureFlags } from '@/platform/db/platform-schema';
+import { anonymousCtx, asSystem, withDb, type Ctx, type Tx } from '@/platform/db/client';
 import { requirePermission } from '@/platform/auth/permissions';
 import { audit } from '@/platform/audit';
 import { conflict, invalid, notFound, unauthenticated } from '@/platform/errors';
@@ -135,6 +136,13 @@ export const documentInput = z
     if (v.docType === 'id_proof' && (!v.idType || !v.numberLast4)) {
       c.addIssue({ code: 'custom', path: ['numberLast4'], message: 'Pick the ID type and enter its last 4 characters' });
     }
+    if (v.docType === 'nursing_registration') {
+      if (!v.numberLast4) c.addIssue({ code: 'custom', path: ['numberLast4'], message: 'Enter the last 4 characters of the registration number' });
+      if (!v.expiresOn) c.addIssue({ code: 'custom', path: ['expiresOn'], message: 'Enter the date the registration needs renewing' });
+    }
+    if ((v.docType === 'caregiver_training' || v.docType === 'first_aid_certificate' || v.docType === 'medical_qualification') && !v.issuedOn) {
+      c.addIssue({ code: 'custom', path: ['issuedOn'], message: 'Enter the date on the certificate' });
+    }
     if (v.expiresOn && v.expiresOn <= todayIst()) {
       c.addIssue({ code: 'custom', path: ['expiresOn'], message: 'This document has already expired' });
     }
@@ -190,12 +198,37 @@ export async function uploadDocument(ctx: Ctx, raw: unknown, file: { bytes: Buff
   });
 }
 
+/** Tier A services need only status active; Tier B and C also need their feature flag on. */
+function isOpenForApplications(svc: { status: string; riskTier: string }, flagEnabled: boolean | null) {
+  return svc.status === 'active' && (svc.riskTier === 'A' || flagEnabled === true);
+}
+
+/** Services a worker can apply for, with the extra documents each one needs. */
+export async function listApplicableServices() {
+  return withDb(anonymousCtx(), async (tx) => {
+    const rows = await tx
+      .select({ slug: services.slug, name: services.name, status: services.status, riskTier: services.riskTier, config: services.config, flagEnabled: featureFlags.enabled })
+      .from(services)
+      .leftJoin(featureFlags, eq(featureFlags.key, services.featureFlagKey))
+      .orderBy(asc(services.name));
+    return rows
+      .filter((r) => isOpenForApplications(r, r.flagEnabled))
+      .map((r) => ({ slug: r.slug, name: r.name, documents: serviceConfigSchema.parse(r.config).workerRequirements.documents.map((d) => d.type) }));
+  });
+}
+
 export async function applyForService(ctx: Ctx, serviceSlug: string) {
   requirePermission(ctx, 'worker.profile.manage');
   return withDb(ctx, async (tx) => {
     const wp = await requireMyWorker(tx, ctx);
-    const [svc] = await tx.select().from(services).where(eq(services.slug, serviceSlug)).limit(1);
-    if (!svc || svc.riskTier === 'C') throw notFound('Service');
+    const [found] = await tx
+      .select({ svc: services, flagEnabled: featureFlags.enabled })
+      .from(services)
+      .leftJoin(featureFlags, eq(featureFlags.key, services.featureFlagKey))
+      .where(eq(services.slug, serviceSlug))
+      .limit(1);
+    const svc = found?.svc;
+    if (!svc || !isOpenForApplications(svc, found.flagEnabled)) throw notFound('Service');
     const existing = await tx
       .select()
       .from(workerServiceApprovals)

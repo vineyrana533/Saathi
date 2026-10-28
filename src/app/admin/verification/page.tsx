@@ -1,10 +1,11 @@
 import { verificationQueue } from '@/modules/workers/service';
+import { idCheckQueue } from '@/modules/identity/id-check';
 import { can } from '@/platform/auth/permissions';
 import { formatIst } from '@/platform/time';
 import { ActionForm, SubmitButton } from '@/ui/action-form';
 import { EmptyState, Input, Notice, Pill } from '@/ui/primitives';
 import { requireAnyRole, STAFF } from '../../_lib/session';
-import { activateWorkerAction, reviewApplicationAction, reviewDocumentAction } from '../actions';
+import { activateWorkerAction, reviewApplicationAction, reviewDocumentAction, reviewIdCheckAction } from '../actions';
 
 const DOC_LABEL: Record<string, string> = {
   driving_licence: 'Driving licence',
@@ -12,12 +13,25 @@ const DOC_LABEL: Record<string, string> = {
   id_proof: 'ID document',
   selfie: 'Selfie',
   profile_photo: 'Profile photo',
+  caregiver_training: 'Caregiver training certificate',
+  first_aid_certificate: 'First aid certificate',
+  nursing_registration: 'Nursing council registration',
+  medical_qualification: 'Nursing or medical qualification',
+};
+
+const ID_LABEL: Record<string, string> = {
+  aadhaar: 'Aadhaar',
+  pan: 'PAN',
+  voter_id: 'Voter ID',
+  passport: 'Passport',
+  driving_licence: 'Driving licence',
 };
 
 export default async function VerificationPage() {
   const { ctx } = await requireAnyRole(STAFF, '/admin/verification');
   if (!can(ctx, 'worker.verify')) return <Notice tone="warning">Your role cannot review verification. Ask an admin for the verifier role.</Notice>;
   const q = await verificationQueue(ctx);
+  const ids = await idCheckQueue(ctx);
   return (
     <>
       <h1 className="font-display text-h1 font-bold">Verification</h1>
@@ -60,6 +74,49 @@ export default async function VerificationPage() {
                     <input type="hidden" name="decision" value="rejected" />
                     <div className="flex gap-2">
                       <Input name="note" placeholder="Reason the worker will see" aria-label="Rejection reason" />
+                      <SubmitButton variant="secondary">Reject</SubmitButton>
+                    </div>
+                  </ActionForm>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="mt-12" aria-labelledby="customer-ids">
+        <h2 id="customer-ids" className="font-display text-h2 font-bold">
+          Customer IDs ({ids.length})
+        </h2>
+        <p className="mt-1 text-small text-ink-2">Needed before a customer books elder care, domestic help or medical support. Check that the name matches the account and the last 4 characters match.</p>
+        {ids.length === 0 ? (
+          <EmptyState title="No customer IDs waiting" body="New uploads appear here." />
+        ) : (
+          <ul className="mt-4 border-t border-ink">
+            {ids.map((c) => (
+              <li key={c.id} className="grid gap-4 border-b border-rule py-5 lg:grid-cols-12">
+                <div className="lg:col-span-5">
+                  <p className="font-semibold">
+                    {ID_LABEL[c.idType] ?? c.idType}: {c.displayName ?? 'No name on account'}
+                  </p>
+                  <p className="text-small text-ink-2">
+                    {c.numberMasked} · {c.phoneMasked} · uploaded {formatIst(c.createdAt)}
+                  </p>
+                  <a className="link text-small" href={`/api/v1/admin/id-checks/${c.id}/file`} target="_blank" rel="noopener">
+                    Open file (logged)
+                  </a>
+                </div>
+                <div className="flex flex-wrap items-start gap-3 lg:col-span-7">
+                  <ActionForm action={reviewIdCheckAction} errorTitle="Could not save">
+                    <input type="hidden" name="checkId" value={c.id} />
+                    <input type="hidden" name="decision" value="approved" />
+                    <SubmitButton>Approve</SubmitButton>
+                  </ActionForm>
+                  <ActionForm action={reviewIdCheckAction} errorTitle="Could not save" className="flex-1">
+                    <input type="hidden" name="checkId" value={c.id} />
+                    <input type="hidden" name="decision" value="rejected" />
+                    <div className="flex gap-2">
+                      <Input name="note" placeholder="Reason the customer will see" aria-label="Rejection reason" />
                       <SubmitButton variant="secondary">Reject</SubmitButton>
                     </div>
                   </ActionForm>

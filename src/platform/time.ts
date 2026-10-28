@@ -37,7 +37,15 @@ export const formatIst = (d: Date, opts: Intl.DateTimeFormatOptions = { dateStyl
   new Intl.DateTimeFormat('en-IN', { timeZone: TIME_ZONE, ...opts }).format(d);
 
 export const todayIst = () => istParts(new Date()).date;
-export const tomorrowIst = () => istParts(new Date(Date.now() + 86_400_000)).date;
 
 export const minutesToHhmm = (m: number) =>
   `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+
+/** First IST date, from tomorrow on, when a booking at `time` would still meet the service's notice period. */
+export function firstBookableDateIst(leadTimeMinutes: number, time: string): string {
+  const earliest = Date.now() + leadTimeMinutes * 60_000;
+  for (let days = 1; ; days++) {
+    const date = istParts(new Date(Date.now() + days * 86_400_000)).date;
+    if (fromIst(date, time).getTime() >= earliest) return date;
+  }
+}

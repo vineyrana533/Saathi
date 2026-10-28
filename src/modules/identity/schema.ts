@@ -135,3 +135,34 @@ export const consents = pgTable(
   },
   (t) => [index('consents_user_idx').on(t.userId, t.purpose)],
 );
+
+/**
+ * A customer's ID check, needed before booking services whose config says
+ * customerVerification 'id' (Tier B and C). The file is encrypted at rest like worker documents;
+ * only the last 4 characters of the number are stored.
+ */
+export const customerIdChecks = pgTable(
+  'customer_id_checks',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
+    idType: text('id_type').notNull(),
+    numberMasked: text('number_masked').notNull(),
+    status: text('status').notNull().default('pending'),
+    storageKey: text('storage_key'),
+    sha256: text('sha256'),
+    mimeType: text('mime_type'),
+    reviewedBy: uuid('reviewed_by').references(() => users.id),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+    reviewNote: text('review_note'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('customer_id_checks_user_idx').on(t.userId, t.createdAt),
+    index('customer_id_checks_status_idx').on(t.status, t.createdAt),
+    check('customer_id_checks_status_chk', sql`${t.status} in ('pending','approved','rejected')`),
+    check('customer_id_checks_type_chk', sql`${t.idType} in ('aadhaar','pan','voter_id','passport','driving_licence')`),
+  ],
+);

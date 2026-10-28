@@ -61,7 +61,7 @@ const EVENT_STAFF_CONFIG: ServiceConfig = serviceConfigSchema.parse({
   leadTimeMinutes: 24 * 60,
   maxAdvanceDays: 90,
   allowedHours: { startMinute: 7 * 60, endMinute: 23 * 60 },
-  workersRequired: { min: 1, max: 50 },
+  workersRequired: { min: 1, max: 1 },
   location: { mode: 'customer_address', travelRadiusKm: 40, outstationAllowed: false },
   questions: [
     { id: 'role', label: 'Role needed', type: 'select', required: true, options: [
@@ -71,13 +71,13 @@ const EVENT_STAFF_CONFIG: ServiceConfig = serviceConfigSchema.parse({
   ],
   workerRequirements: { documents: [], requirePoliceVerification: true, requireKyc: true, minRating: { value: 3.5, afterCount: 5 } },
   customerVerification: 'phone',
-  matching: 'manual',
+  matching: 'customer_choice',
   cancellationPolicy: standardCancellation,
   payment: 'prepay',
   safety: { startOtp: true, endOtp: true, checkInIntervalMinutes: null, sos: true, publicVenueOnly: false },
   highlights: [
-    'Hosts, ushers, registration desk staff and helpers, from one person to a full team.',
-    'Our team confirms numbers, timings and dress code with you before the day.',
+    'Hosts, ushers, registration desk staff and helpers for events and offices.',
+    'Book one person online. For a bigger team, tell us what you need and our team arranges it.',
     'Start and end codes for every person on the job.',
   ],
 });
@@ -128,9 +128,9 @@ const COMPANION_CONFIG: ServiceConfig = serviceConfigSchema.parse({
 });
 
 /**
- * Tier C: in-home and medical work. Configured with the extra documents and checks they need,
- * but never bookable until licences, legal review and internal sign-off are done (decisions.md T-27).
- * Every Tier C service requires a verified customer ID, police verification and KYC.
+ * Tier C: in-home and medical work, bookable online since the owner's decision of 28 Oct 2026
+ * (decisions.md T-31) while legal items L-11 to L-13 stay open. Each has its own feature flag as
+ * the off switch. Every Tier C service requires a verified customer ID, police verification and KYC.
  */
 const ELDER_CARE_CONFIG: ServiceConfig = serviceConfigSchema.parse({
   durationMinutes: { min: 240, max: 720, step: 60 },
@@ -152,7 +152,7 @@ const ELDER_CARE_CONFIG: ServiceConfig = serviceConfigSchema.parse({
     minRating: { value: 4, afterCount: 3 },
   },
   customerVerification: 'id',
-  matching: 'manual',
+  matching: 'customer_choice',
   cancellationPolicy: standardCancellation,
   payment: 'prepay',
   safety: { startOtp: true, endOtp: true, checkInIntervalMinutes: 120, sos: true, publicVenueOnly: false },
@@ -168,7 +168,7 @@ const DOMESTIC_HELP_CONFIG: ServiceConfig = serviceConfigSchema.parse({
   leadTimeMinutes: 24 * 60,
   maxAdvanceDays: 60,
   allowedHours: { startMinute: 7 * 60, endMinute: 20 * 60 },
-  workersRequired: { min: 1, max: 3 },
+  workersRequired: { min: 1, max: 1 },
   location: { mode: 'customer_address', travelRadiusKm: 15, outstationAllowed: false },
   questions: [
     { id: 'task', label: 'What needs doing?', type: 'select', required: true, options: [
@@ -178,7 +178,7 @@ const DOMESTIC_HELP_CONFIG: ServiceConfig = serviceConfigSchema.parse({
   ],
   workerRequirements: { documents: [], requirePoliceVerification: true, requireKyc: true, minRating: { value: 4, afterCount: 3 } },
   customerVerification: 'id',
-  matching: 'manual',
+  matching: 'customer_choice',
   cancellationPolicy: standardCancellation,
   payment: 'prepay',
   safety: { startOtp: true, endOtp: true, checkInIntervalMinutes: null, sos: true, publicVenueOnly: false },
@@ -208,7 +208,7 @@ const MEDICAL_SUPPORT_CONFIG: ServiceConfig = serviceConfigSchema.parse({
     minRating: { value: 4, afterCount: 3 },
   },
   customerVerification: 'id',
-  matching: 'manual',
+  matching: 'customer_choice',
   cancellationPolicy: standardCancellation,
   payment: 'prepay',
   safety: { startOtp: true, endOtp: true, checkInIntervalMinutes: 120, sos: true, publicVenueOnly: false },
@@ -231,13 +231,14 @@ export const DRIVER_PRICING: PricingConfig = pricingConfigSchema.parse({
 
 const HOURLY_PLACEHOLDER = (ratePaise: number): PricingConfig => ({ ...DRIVER_PRICING, hourlyRatePaise: ratePaise });
 
-const TIER_C_CITIES = { delhi: 'waitlist', noida: 'waitlist', gurugram: 'waitlist', mumbai: 'waitlist' } as const;
+/** Delhi NCR is live; Mumbai stays on the waitlist until the city opens. */
+const NCR_LIVE = { delhi: 'live', noida: 'live', gurugram: 'live', mumbai: 'waitlist' } as const;
 
 const FLAG_SEED = [
-  { key: 'category.social-companion', description: 'Tier B social companion category. Enable only after the Milestone 6 safety review and sign-off.' },
-  { key: 'category.elder-care', description: 'Tier C elder care at home. Enable only after licences, legal review and internal sign-off (decisions.md T-27).' },
-  { key: 'category.domestic-help', description: 'Tier C domestic help. Enable only after legal review and internal sign-off (decisions.md T-27).' },
-  { key: 'category.medical-support', description: 'Tier C home nursing. Enable only after licences, legal review and internal sign-off (decisions.md T-27).' },
+  { key: 'category.social-companion', enabled: false, description: 'Tier B social companion category. Enable only after the Milestone 6 safety review and sign-off.' },
+  { key: 'category.elder-care', enabled: true, description: 'Tier C elder care at home. Enabled by the owner on 28 Oct 2026 (decisions.md T-31); turn off to stop new bookings.' },
+  { key: 'category.domestic-help', enabled: true, description: 'Tier C domestic help. Enabled by the owner on 28 Oct 2026 (decisions.md T-31); turn off to stop new bookings.' },
+  { key: 'category.medical-support', enabled: true, description: 'Tier C home nursing. Enabled by the owner on 28 Oct 2026 (decisions.md T-31); turn off to stop new bookings.' },
 ];
 
 const CATEGORY_SEED = [
@@ -245,39 +246,40 @@ const CATEGORY_SEED = [
   { slug: 'event-staff', name: 'Event and business staff', riskTier: 'A', sortOrder: 2 },
   { slug: 'errands', name: 'Errands and appointment help', riskTier: 'A', sortOrder: 3 },
   { slug: 'social-companion', name: 'Social companion (platonic)', riskTier: 'B', sortOrder: 4 },
-  { slug: 'care', name: 'Care at home (licensed, later)', riskTier: 'C', sortOrder: 5 },
-  { slug: 'home-help', name: 'Help at home (later)', riskTier: 'C', sortOrder: 6 },
+  { slug: 'care', name: 'Care at home', riskTier: 'C', sortOrder: 5 },
+  { slug: 'home-help', name: 'Help at home', riskTier: 'C', sortOrder: 6 },
 ] as const;
 
 const SERVICE_SEED = [
   { slug: 'personal-driver', category: 'driving', name: 'Personal driver', riskTier: 'A', bookingMode: 'direct',
     summary: 'A verified driver for your own car, by the hour or for the day.', config: PERSONAL_DRIVER_CONFIG,
     status: 'active', featureFlagKey: null, pricing: DRIVER_PRICING,
-    cityStatus: { delhi: 'live', noida: 'live', gurugram: 'live', mumbai: 'waitlist' } },
-  { slug: 'event-staff', category: 'event-staff', name: 'Event and business staff', riskTier: 'A', bookingMode: 'assisted',
+    cityStatus: NCR_LIVE },
+  { slug: 'event-staff', category: 'event-staff', name: 'Event and business staff', riskTier: 'A', bookingMode: 'both',
     summary: 'Hosts, ushers, registration desk staff and helpers for events and offices.', config: EVENT_STAFF_CONFIG,
     status: 'active', featureFlagKey: null, pricing: HOURLY_PLACEHOLDER(30000),
-    cityStatus: { delhi: 'waitlist', noida: 'waitlist', gurugram: 'waitlist', mumbai: 'waitlist' } },
+    cityStatus: NCR_LIVE },
   { slug: 'errands', category: 'errands', name: 'Errands and appointment help', riskTier: 'A', bookingMode: 'both',
     summary: 'Queues, document runs, shopping help, and company at appointments (non-medical).', config: ERRANDS_CONFIG,
     status: 'active', featureFlagKey: null, pricing: HOURLY_PLACEHOLDER(20000),
-    cityStatus: { delhi: 'waitlist', noida: 'waitlist', gurugram: 'waitlist', mumbai: 'waitlist' } },
+    cityStatus: NCR_LIVE },
   { slug: 'social-companion', category: 'social-companion', name: 'Social companion', riskTier: 'B', bookingMode: 'assisted',
     summary: 'Platonic company in public places only. Not available yet.', config: COMPANION_CONFIG,
     status: 'disabled', featureFlagKey: 'category.social-companion', pricing: HOURLY_PLACEHOLDER(30000),
     cityStatus: { delhi: 'waitlist' } },
-  { slug: 'elder-care', category: 'care', name: 'Elder care', riskTier: 'C', bookingMode: 'assisted',
+  // Tier C prices are placeholders pending owner sign-off (decisions.md P-09); admins change them in the catalogue.
+  { slug: 'elder-care', category: 'care', name: 'Elder care', riskTier: 'C', bookingMode: 'both',
     summary: 'A trained caregiver for an older family member at home: company, daily routines and moving around safely. Non-medical.',
-    config: ELDER_CARE_CONFIG, status: 'disabled', featureFlagKey: 'category.elder-care', pricing: HOURLY_PLACEHOLDER(0),
-    cityStatus: TIER_C_CITIES },
-  { slug: 'domestic-help', category: 'home-help', name: 'Domestic help', riskTier: 'C', bookingMode: 'assisted',
+    config: ELDER_CARE_CONFIG, status: 'active', featureFlagKey: 'category.elder-care', pricing: HOURLY_PLACEHOLDER(20000),
+    cityStatus: NCR_LIVE },
+  { slug: 'domestic-help', category: 'home-help', name: 'Domestic help', riskTier: 'C', bookingMode: 'both',
     summary: 'Help at home with cleaning, cooking, laundry and dishes, by the hour or on a regular schedule.',
-    config: DOMESTIC_HELP_CONFIG, status: 'disabled', featureFlagKey: 'category.domestic-help', pricing: HOURLY_PLACEHOLDER(0),
-    cityStatus: TIER_C_CITIES },
-  { slug: 'medical-support', category: 'care', name: 'Medical support at home', riskTier: 'C', bookingMode: 'assisted',
+    config: DOMESTIC_HELP_CONFIG, status: 'active', featureFlagKey: 'category.domestic-help', pricing: HOURLY_PLACEHOLDER(15000),
+    cityStatus: NCR_LIVE },
+  { slug: 'medical-support', category: 'care', name: 'Medical support at home', riskTier: 'C', bookingMode: 'both',
     summary: 'Home nursing by registered nurses: help with medicines, dressings and recovery after a hospital stay.',
-    config: MEDICAL_SUPPORT_CONFIG, status: 'disabled', featureFlagKey: 'category.medical-support', pricing: HOURLY_PLACEHOLDER(0),
-    cityStatus: TIER_C_CITIES },
+    config: MEDICAL_SUPPORT_CONFIG, status: 'active', featureFlagKey: 'category.medical-support', pricing: HOURLY_PLACEHOLDER(35000),
+    cityStatus: NCR_LIVE },
 ] as const;
 
 export async function seedCatalog(tx: Tx) {
@@ -292,7 +294,7 @@ export async function seedCatalog(tx: Tx) {
     await tx.insert(serviceCategories).values(cat).onConflictDoNothing();
   }
   for (const flag of FLAG_SEED) {
-    await tx.insert(featureFlags).values({ ...flag, enabled: false }).onConflictDoNothing();
+    await tx.insert(featureFlags).values(flag).onConflictDoNothing();
   }
 
   for (const s of SERVICE_SEED) {

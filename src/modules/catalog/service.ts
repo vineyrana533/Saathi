@@ -43,14 +43,14 @@ export async function loadServiceInCity(tx: Tx, serviceSlug: string, citySlug: s
 }
 
 /**
- * Whether customers can book this service here at all. Tier C is never bookable at launch;
- * Tier B needs its feature flag; any service needs status active and the city-service live.
- * Supply threshold is checked separately (seo/service.ts) because it needs a worker count.
+ * Whether customers can book this service here at all. Tier B and Tier C need their feature
+ * flag on (the off switch, decisions.md T-31); any service needs status active and the
+ * city-service live. Supply threshold is checked separately (seo/supply.ts) because it needs a
+ * worker count.
  */
 export function isOfferable(s: ServiceInCity): boolean {
   if (s.service.status !== 'active') return false;
-  if (s.service.riskTier === 'C') return false;
-  if (s.service.riskTier === 'B' && !s.flagEnabled) return false;
+  if ((s.service.riskTier === 'B' || s.service.riskTier === 'C') && (!s.service.featureFlagKey || !s.flagEnabled)) return false;
   if (s.service.featureFlagKey && !s.flagEnabled) return false;
   return s.serviceCity.status === 'live';
 }

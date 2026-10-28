@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { t, errorText } from '@/i18n';
 import { searchAvailableWorkers } from '@/modules/bookings/service';
+import { myIdCheck } from '@/modules/identity/id-check';
 import { listZonesByCitySlug } from '@/modules/geo/service';
 import { formatInr } from '@/modules/pricing/engine';
 import { formatIst } from '@/platform/time';
@@ -17,7 +18,7 @@ export default async function SearchPage({ params, searchParams }: { params: Pro
   const { service } = await params;
   const sp = await searchParams;
   const input = slotFromParams(service, sp);
-  const { ctx } = await pageSession();
+  const { ctx, session } = await pageSession();
   const back = `/${input.citySlug || 'delhi'}/${service}`;
 
   let result;
@@ -52,6 +53,9 @@ export default async function SearchPage({ params, searchParams }: { params: Pro
   const area = (await listZonesByCitySlug(s.city.slug)).find((z) => z.id === input.zoneId)?.name ?? '';
   const docs = s.service.config.workerRequirements;
   const hours = input.durationMinutes / 60;
+  // In-home services need a verified customer ID; say so before people pick someone, not after.
+  const idStatus =
+    s.service.config.customerVerification !== 'id' ? 'approved' : session?.roles.includes('customer') ? (await myIdCheck(ctx))?.status ?? 'none' : 'none';
 
   return (
     <Container className="pb-16">
@@ -73,6 +77,21 @@ export default async function SearchPage({ params, searchParams }: { params: Pro
           {t('search.change')}
         </Link>
       </div>
+
+      {idStatus !== 'approved' && (
+        <div className="mt-6">
+          <Notice tone="warning" title={t('search.idNeededTitle')}>
+            <p>{idStatus === 'pending' ? t('search.idPendingBody') : t('search.idNeededBody')}</p>
+            {idStatus !== 'pending' && (
+              <p className="mt-2">
+                <Link className="link font-semibold" href="/account#id-check">
+                  {t('search.idCta')}
+                </Link>
+              </p>
+            )}
+          </Notice>
+        </div>
+      )}
 
       {workers.length === 0 ? (
         <EmptyState title={t('search.emptyTitle')} body={t('search.emptyBody')} action={<ButtonLink href={back}>{t('search.change')}</ButtonLink>} />
@@ -97,6 +116,8 @@ export default async function SearchPage({ params, searchParams }: { params: Pro
                       {docs.requireKyc && <VerifiedBadge>{t('badges.id')}</VerifiedBadge>}
                       {docs.requirePoliceVerification && <VerifiedBadge>{t('badges.police')}</VerifiedBadge>}
                       {docs.documents.some((d) => d.type === 'driving_licence') && <VerifiedBadge>{t('badges.licence')}</VerifiedBadge>}
+                      {docs.documents.some((d) => d.type === 'nursing_registration') && <VerifiedBadge>{t('badges.nursing')}</VerifiedBadge>}
+                      {docs.documents.some((d) => d.type === 'caregiver_training') && <VerifiedBadge>{t('badges.caregiver')}</VerifiedBadge>}
                     </div>
                     <p className="mt-2 text-small">
                       {w.ratingCount === 0

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { activateWorker, reviewDocument, reviewServiceApplication } from '@/modules/workers/service';
+import { reviewIdCheck } from '@/modules/identity/id-check';
 import { setServiceCityStatus, updateServiceCityPricing } from '@/modules/catalog/service';
 import { pricingConfigSchema } from '@/modules/catalog/config';
 import { setWaitlistStatus, type FollowUpStatus } from '@/modules/seo/service';
@@ -86,5 +87,15 @@ export async function setEnquiryStatusAction(_: ActionState, fd: FormData): Prom
     await setEnquiryStatus(ctx, { id: str(fd, 'id'), status: str(fd, 'status') as FollowUpStatus });
   });
   revalidatePath('/admin/waitlist');
+  return state;
+}
+
+export async function reviewIdCheckAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  const state = await runAction(async () => {
+    const { ctx } = await pageSession();
+    await reviewIdCheck(ctx, { checkId: str(fd, 'checkId'), decision: str(fd, 'decision') === 'approved' ? 'approved' : 'rejected', note: str(fd, 'note') || undefined });
+    return 'Saved.';
+  });
+  revalidatePath('/admin', 'layout');
   return state;
 }

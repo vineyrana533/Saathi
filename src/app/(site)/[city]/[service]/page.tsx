@@ -5,7 +5,7 @@ import { t } from '@/i18n';
 import { getCityServicePage } from '@/modules/seo/service';
 import { listZonesByCitySlug } from '@/modules/geo/service';
 import { formatInr } from '@/modules/pricing/engine';
-import { minutesToHhmm, todayIst, tomorrowIst } from '@/platform/time';
+import { firstBookableDateIst, minutesToHhmm, todayIst } from '@/platform/time';
 import { env } from '@/platform/env';
 import { ActionForm, SubmitButton } from '@/ui/action-form';
 import { BookingQuestions } from '@/ui/booking-questions';
@@ -50,7 +50,8 @@ export default async function CityServicePage({ params }: { params: Promise<Para
   const cfg = page.service.config;
   const rate = page.serviceCity.pricing.hourlyRatePaise ?? 0;
   const vars = { minHours: cfg.durationMinutes.min / 60, lead: cfg.leadTimeMinutes / 60, price: formatInr(rate) };
-  const tomorrow = tomorrowIst();
+  // Services with a day's notice would refuse tomorrow morning, so start the form on a date that works.
+  const firstDate = firstBookableDateIst(cfg.leadTimeMinutes, '10:00');
   const today = todayIst();
   const durations: number[] = [];
   for (let m = cfg.durationMinutes.min; m <= cfg.durationMinutes.max; m += cfg.durationMinutes.step) durations.push(m);
@@ -153,7 +154,7 @@ export default async function CityServicePage({ params }: { params: Promise<Para
                   </Field>
                   <div className="grid gap-5 sm:grid-cols-2">
                     <Field id="f-date" label={t('cityService.date')}>
-                      <Input id="f-date" name="date" type="date" required defaultValue={tomorrow} min={today} />
+                      <Input id="f-date" name="date" type="date" required defaultValue={firstDate} min={today} />
                     </Field>
                     <Field id="f-time" label={t('cityService.time')}>
                       <Select id="f-time" name="time" defaultValue="10:00">
