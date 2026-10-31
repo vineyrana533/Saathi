@@ -1,6 +1,10 @@
 import { t } from '@/i18n';
 import { getMyWorkerProfile, LANGUAGES } from '@/modules/workers/service';
 import { listAllZones, listCities } from '@/modules/geo/service';
+import { listLocalityOptions } from '@/modules/geo/location';
+import { LocationPicker } from '@/ui/location-picker';
+
+const RADII = [3, 5, 10, 15, 20, 25, 30, 40, 50];
 import { ActionForm, SubmitButton } from '@/ui/action-form';
 import { Field, Input, PageHeading, Select, Textarea } from '@/ui/primitives';
 import { requireSession } from '../../_lib/session';
@@ -8,7 +12,7 @@ import { saveProfileAction } from '../actions';
 
 export default async function WorkerProfilePage() {
   const { ctx } = await requireSession('/worker/profile');
-  const [mine, cities, zones] = await Promise.all([getMyWorkerProfile(ctx), listCities(), listAllZones()]);
+  const [mine, cities, zones, homeOptions] = await Promise.all([getMyWorkerProfile(ctx), listCities(), listAllZones(), listLocalityOptions()]);
   const p = mine?.profile;
   const homeCity = cities.find((c) => c.id === p?.homeCityId)?.slug ?? 'delhi';
   return (
@@ -50,6 +54,27 @@ export default async function WorkerProfilePage() {
             {cities.map((c) => (
               <option key={c.slug} value={c.slug}>
                 {c.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <LocationPicker
+          id="f-baseLocalityId"
+          name="baseLocalityId"
+          latName="baseLat"
+          lngName="baseLng"
+          label={t('location.homeArea')}
+          help={t('location.homeHelp')}
+          options={homeOptions}
+          defaultValue={p?.baseLocalityId ?? null}
+          precision={2}
+          labels={{ useMine: t('location.useMine'), locating: t('location.locating'), using: t('location.using'), denied: t('location.denied'), outside: t('location.homeOutside') }}
+        />
+        <Field id="f-travelRadiusKm" label={t('location.radius')}>
+          <Select id="f-travelRadiusKm" name="travelRadiusKm" defaultValue={String(p?.travelRadiusKm ?? 10)} className="max-w-56">
+            {RADII.map((km) => (
+              <option key={km} value={km}>
+                {t('location.radiusOption', { km })}
               </option>
             ))}
           </Select>

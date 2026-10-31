@@ -22,7 +22,9 @@ export async function createRequestAction(_: ActionState, fd: FormData): Promise
     const out = await createServiceRequest(ctx, {
       serviceSlug: str(fd, 'service'),
       citySlug: str(fd, 'city'),
-      zoneId: str(fd, 'zoneId'),
+      localityId: str(fd, 'loc') || undefined,
+      lat: str(fd, 'lat') || undefined,
+      lng: str(fd, 'lng') || undefined,
       date: str(fd, 'date'),
       time: str(fd, 'time'),
       durationMinutes: str(fd, 'durationMinutes'),

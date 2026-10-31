@@ -3,9 +3,11 @@ import { enforceRateLimit, LIMITS } from '@/platform/rate-limit';
 import { searchAvailableWorkers } from '@/modules/bookings/service';
 
 /**
- * GET /api/v1/search?service=personal-driver&city=delhi&zone=<uuid>&date=YYYY-MM-DD&time=HH:MM&duration=240
+ * GET /api/v1/search?service=personal-driver&city=delhi&loc=<locality uuid>&date=YYYY-MM-DD&time=HH:MM&duration=240
  *   &a.vehicle_class=LMV&a.transmission=manual
- * Booking answers are passed as a.<questionId>.
+ * Booking answers are passed as a.<questionId>. Location: loc (a locality), or lat and lng (a phone
+ * location), or zone (older clients; matches by zone only, without distance). Workers come nearest
+ * first with distanceKm.
  */
 export const GET = api(async (req, { ctx }) => {
   await enforceRateLimit(`search:${clientIp(req)}`, LIMITS.searchPerIp);
@@ -18,7 +20,10 @@ export const GET = api(async (req, { ctx }) => {
   const res = await searchAvailableWorkers(ctx, {
     serviceSlug: q.get('service') ?? '',
     citySlug: q.get('city') ?? '',
-    zoneId: q.get('zone') ?? '',
+    zoneId: q.get('zone') || undefined,
+    localityId: q.get('loc') || undefined,
+    lat: q.get('lat') ? Number(q.get('lat')) : undefined,
+    lng: q.get('lng') ? Number(q.get('lng')) : undefined,
     date: q.get('date') ?? '',
     time: q.get('time') ?? '',
     durationMinutes: Number(q.get('duration') ?? 0),

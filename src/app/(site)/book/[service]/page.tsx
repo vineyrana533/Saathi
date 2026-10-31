@@ -3,7 +3,6 @@ import Link from 'next/link';
 import { t, errorText } from '@/i18n';
 import { searchAvailableWorkers } from '@/modules/bookings/service';
 import { myIdCheck } from '@/modules/identity/id-check';
-import { listZonesByCitySlug } from '@/modules/geo/service';
 import { formatInr } from '@/modules/pricing/engine';
 import { formatIst } from '@/platform/time';
 import { isAppError } from '@/platform/errors';
@@ -50,7 +49,7 @@ export default async function SearchPage({ params, searchParams }: { params: Pro
 
   const workers = result.workers.slice(0, 20);
   const hasMore = result.workers.length > 20;
-  const area = (await listZonesByCitySlug(s.city.slug)).find((z) => z.id === input.zoneId)?.name ?? '';
+  const area = result.location?.localityName ?? result.location?.zoneName ?? '';
   const docs = s.service.config.workerRequirements;
   const hours = input.durationMinutes / 60;
   // In-home services need a verified customer ID; say so before people pick someone, not after.
@@ -110,6 +109,11 @@ export default async function SearchPage({ params, searchParams }: { params: Pro
                       </Link>
                     </h2>
                     <p className="text-small text-ink-2">
+                      {w.distanceKm != null && (
+                        <span className="font-semibold text-ink">
+                          {w.distanceKm < 1 ? t('location.awayNear') : t('location.awayKm', { km: Math.round(w.distanceKm) })}.{' '}
+                        </span>
+                      )}
                       {t('search.experience', { n: w.yearsExperience })}. {t('search.languages', { languages: w.languages.join(', ') })}
                     </p>
                     <div className="mt-2 flex flex-wrap gap-2">

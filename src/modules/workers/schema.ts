@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import {
   check,
   date,
+  doublePrecision,
   index,
   integer,
   jsonb,
@@ -15,7 +16,7 @@ import {
   boolean,
 } from 'drizzle-orm/pg-core';
 import { organisations, users } from '../identity/schema';
-import { cities, zones } from '../geo/schema';
+import { cities, localities, zones } from '../geo/schema';
 import { services } from '../catalog/schema';
 
 export const workerProfiles = pgTable(
@@ -42,6 +43,11 @@ export const workerProfiles = pgTable(
     ratingCount: integer('rating_count').notNull().default(0),
     strikes: integer('strikes').notNull().default(0),
     customerGenderPreference: text('customer_gender_preference').notNull().default('any'),
+    /** Home base for distance matching. Stored to about a kilometre and never shown to anyone. */
+    baseLocalityId: uuid('base_locality_id').references(() => localities.id),
+    baseLat: doublePrecision('base_lat'),
+    baseLng: doublePrecision('base_lng'),
+    travelRadiusKm: smallint('travel_radius_km').notNull().default(10),
     searchIndexOptIn: boolean('search_index_opt_in').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -54,6 +60,8 @@ export const workerProfiles = pgTable(
     check('worker_profiles_photo_chk', sql`${t.photoStatus} in ('none','pending','approved','rejected')`),
     check('worker_profiles_gender_chk', sql`${t.gender} is null or ${t.gender} in ('female','male','non_binary','prefer_not_to_say')`),
     check('worker_profiles_pref_chk', sql`${t.customerGenderPreference} in ('any','female','male')`),
+    check('worker_profiles_radius_chk', sql`${t.travelRadiusKm} between 1 and 50`),
+    check('worker_profiles_base_chk', sql`(${t.baseLat} is null) = (${t.baseLng} is null)`),
   ],
 );
 

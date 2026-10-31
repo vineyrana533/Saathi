@@ -55,6 +55,8 @@ All stored in `config_values` and editable per city and per service.
 | P-06 | Minimum worker rating for search | None for new workers; 3.5 after 5 ratings | Pending sign-off |
 | P-07 | Payout hold for new workers | First payout after 2 completed bookings | Pending sign-off |
 | P-08 | Brand name | "Saathi" is a working name; no logo designed | Pending sign-off |
+| P-11 | Travel gap between one person's jobs | 60 minutes (config `booking.travel_gap_minutes`) | Pending sign-off |
+| P-12 | Default travel distance for a new worker | 10 km; workers choose 3 to 50 km, capped by each service's limit (driver 40, event staff 40, errands 25, care services 15) | Pending sign-off |
 | P-10 | First response to assisted requests | 2 business hours, business hours 09:00 to 19:00 IST, Monday to Saturday (config `request.first_response_minutes`, `business_hours`) | Pending sign-off |
 | P-09 | Hourly prices for the other services, Delhi, Noida, Gurugram | Event staff ₹300, errands ₹200, elder care ₹200, domestic help ₹150, medical support ₹350 per hour; placeholders entered for staging only | Pending sign-off (ops to set real prices in the admin catalogue; no market research was done) |
 
@@ -147,3 +149,12 @@ None of these are legal conclusions. Each is built as configuration or as a capa
 | T-42 | On a team booking, a worker who cancels frees only their own place; the booking stays on for the customer | Decided | Ops see the empty place. The customer can still cancel the whole booking under the normal policy. Each person is rated separately. |
 | T-43 | Start and end codes stay one per booking. Any person on the team can enter them | Decided for Milestone 2 | Per-person check-in belongs with safety check-ins (Milestone 3). |
 | T-44 | Workers do not see requests or accept job offers yet. Ops confirm people by phone before proposing them | Decided for Milestone 2 | Job offers with accept or decline are Milestone 3 (M10). |
+
+## 11. Distance matching, step 1 (31 Oct 2026)
+
+| ID | Decision | Status | Reason and notes |
+|---|---|---|---|
+| T-45 | Jobs and workers are placed on the map: a job by its locality (about 90 hand-entered neighbourhood centres across Delhi NCR and Mumbai) or the customer's phone location; a worker by a home base (locality or phone location) and a travel distance. A worker with a home base is offered a job only if it is within both their travel distance and the service's limit; a worker without one still matches by zone | Decided | Free, no map vendor. Locality centres are approximate (about a kilometre) and should be checked before launch. Distances are straight-line, not road travel time (step 2 needs a paid map vendor, asked for separately). Zones stay for supply counting and as the fallback. API clients that send only a zone keep the old zone matching. |
+| T-46 | One person's jobs are at least 60 minutes apart (P-11) | Decided | Enforced in the same eligibility query that runs under the worker row lock when booking or assigning, so it holds under concurrent bookings. Back-to-back bookings, allowed in Milestone 1, are now refused. |
+| T-47 | Ranking: distance in km, minus 2 km per star above 4 for people with 3 or more ratings (plus per star below), plus 0.5 km per job already booked within 7 days either side of now (up to 10) | Decided, tune with real data | Nearest first, without letting the same few people take every job. Unknown distance counts as 5 km. |
+| T-48 | Locations are kept only as precise as matching needs: job points to about 100 m, worker home bases to about 1 km. Customers see "about 4 km away", never a worker's location; nothing is tracked in the background | Decided | Phone location is read only when the person presses "Use my current location", after the browser asks permission. |

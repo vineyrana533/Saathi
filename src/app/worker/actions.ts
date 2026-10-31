@@ -20,7 +20,11 @@ export async function saveProfileAction(_: ActionState, fd: FormData): Promise<A
       homeCitySlug: str(fd, 'homeCitySlug'),
       zoneIds: fd.getAll('zoneIds').map(String),
       customerGenderPreference: (str(fd, 'customerGenderPreference') || 'any') as never,
-    });
+      baseLocalityId: str(fd, 'baseLocalityId') || undefined,
+      baseLat: str(fd, 'baseLat') || undefined,
+      baseLng: str(fd, 'baseLng') || undefined,
+      travelRadiusKm: str(fd, 'travelRadiusKm') || undefined,
+    } as never);
     return t('worker.saved');
   });
   revalidatePath('/worker', 'layout');

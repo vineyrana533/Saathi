@@ -22,6 +22,8 @@ import { conflict, invalid, notFound, unauthenticated } from '@/platform/errors'
 import { documentStore, MAX_UPLOAD_BYTES, sniffType } from '@/platform/adapters/storage';
 import { todayIst } from '@/platform/time';
 import { enqueueNotification } from '../notifications/service';
+import { optionalCoord, optionalUuid } from '../bookings/validation';
+import { resolveHomeBase } from '../geo/location';
 
 export const LANGUAGES = ['English', 'Hindi', 'Punjabi', 'Marathi', 'Bengali', 'Urdu', 'Tamil', 'Telugu', 'Gujarati', 'Kannada', 'Malayalam'] as const;
 export const VEHICLE_CLASSES = ['LMV', 'LMV-TR', 'MCWG', 'TRANS'] as const;
@@ -35,6 +37,11 @@ export const workerProfileInput = z.object({
   homeCitySlug: z.string(),
   zoneIds: z.array(z.string().uuid()).min(1, 'Pick at least one area you can work in').max(20),
   customerGenderPreference: z.enum(['any', 'female', 'male']).default('any'),
+  /** Home base for distance matching: a locality, or the phone location (kept to about 1 km). */
+  baseLocalityId: optionalUuid,
+  baseLat: optionalCoord(6, 38),
+  baseLng: optionalCoord(68, 98),
+  travelRadiusKm: z.coerce.number().int().min(1, 'Pick how far you will travel').max(50).optional(),
 });
 export type WorkerProfileInput = z.infer<typeof workerProfileInput>;
 
@@ -87,6 +94,10 @@ export async function saveWorkerProfile(ctx: Ctx, raw: WorkerProfileInput) {
     if (validZones.length !== input.zoneIds.length) throw invalid('invalid_zone', 'One of the areas is not valid');
 
     const [existing] = await tx.select().from(workerProfiles).where(eq(workerProfiles.userId, ctx.userId!)).limit(1);
+    // Only change the home base when one is given, so older clients do not wipe it.
+    const base = input.baseLocalityId || (input.baseLat != null && input.baseLng != null)
+      ? await resolveHomeBase(tx, { localityId: input.baseLocalityId, lat: input.baseLat, lng: input.baseLng })
+      : null;
     const values = {
       displayName: input.displayName,
       bio: input.bio,
@@ -95,6 +106,8 @@ export async function saveWorkerProfile(ctx: Ctx, raw: WorkerProfileInput) {
       yearsExperience: input.yearsExperience,
       homeCityId: city.id,
       customerGenderPreference: input.customerGenderPreference,
+      ...(base ?? {}),
+      ...(input.travelRadiusKm ? { travelRadiusKm: input.travelRadiusKm } : {}),
       updatedAt: sql`now()`,
     };
     let wp;

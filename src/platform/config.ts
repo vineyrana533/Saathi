@@ -21,6 +21,8 @@ const DEFS = {
     fallback: { direct: 180, assisted: 1440 },
   },
   'quote.validity_hours': { schema: z.number().int().min(1).max(168), fallback: 48 },
+  /** Minimum time between the end of one of a person's jobs and the start of the next, for travel. */
+  'booking.travel_gap_minutes': { schema: z.number().int().min(0).max(240), fallback: 60 },
   /** Minutes of business time before a new request must get its first response. */
   'request.first_response_minutes': { schema: z.number().int().min(15).max(2880), fallback: 120 },
   /** IST working window; weekdays 0 = Monday. */

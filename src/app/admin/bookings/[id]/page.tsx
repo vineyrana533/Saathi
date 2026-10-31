@@ -96,7 +96,7 @@ export default async function AdminBookingDetail({ params }: { params: Promise<{
                             <span className="font-semibold">{w.displayName}</span>
                             <span className="text-small text-ink-2">
                               {' '}
-                              · {w.yearsExperience} years · {w.ratingCount ? `${(w.ratingAvgX100 / 100).toFixed(1)} from ${w.ratingCount}` : 'new'}
+                              · {w.distanceKm != null ? `${w.distanceKm} km away · ` : ''}{w.yearsExperience} years · {w.ratingCount ? `${(w.ratingAvgX100 / 100).toFixed(1)} from ${w.ratingCount}` : 'new'}
                             </span>
                           </span>
                           <ActionForm action={assignWorkerAction} errorTitle="Could not assign">

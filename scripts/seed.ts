@@ -9,10 +9,10 @@
  *   page passes the go-live threshold in staging. Their names say "Sample". They hold no real
  *   documents and cannot sign in.
  */
-import { eq, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { systemCtx, withDb, closeDb, type Tx } from '../src/platform/db/client';
 import { seedCatalog } from '../src/modules/catalog/seed';
-import { cities, zones } from '../src/modules/geo/schema';
+import { cities, localities, zones } from '../src/modules/geo/schema';
 import { services } from '../src/modules/catalog/schema';
 import { consents, customerIdChecks, userRoles, users, type Role } from '../src/modules/identity/schema';
 import { workerDocuments, workerProfiles, workerServiceApprovals, workerWeeklyHours, workerZones } from '../src/modules/workers/schema';
@@ -105,6 +105,27 @@ async function main() {
         const nn = String(i).padStart(2, '0');
         await sampleWorker(tx, `${s.prefix}${nn}`, `${s.label} ${nn}`, all, i % 2 === 0 ? 'female' : 'male', s.service);
       }
+    }
+
+    // Home bases for distance matching (decisions.md T-45), spread across Delhi NCR so each
+    // service has people near most localities. Only fills in workers that have no base yet.
+    const homes = await tx
+      .select({ id: localities.id, name: localities.name, lat: localities.lat, lng: localities.lng })
+      .from(localities)
+      .innerJoin(cities, eq(cities.id, localities.cityId))
+      .where(inArray(cities.slug, ['delhi', 'noida', 'gurugram']))
+      .orderBy(asc(localities.name));
+    const unplaced = await tx
+      .select({ id: workerProfiles.id, name: workerProfiles.displayName })
+      .from(workerProfiles)
+      .where(and(isNull(workerProfiles.baseLat), sql`${workerProfiles.displayName} like 'Sample %' or ${workerProfiles.displayName} = 'Test Driver'`))
+      .orderBy(asc(workerProfiles.displayName));
+    for (const [i, w] of unplaced.entries()) {
+      const home = w.name === 'Test Driver' ? homes.find((l) => l.name === 'Saket')! : homes[(i * 7) % homes.length]!;
+      await tx
+        .update(workerProfiles)
+        .set({ baseLocalityId: home.id, baseLat: home.lat, baseLng: home.lng, travelRadiusKm: w.name === 'Test Driver' ? 15 : 25 })
+        .where(eq(workerProfiles.id, w.id));
     }
   });
   console.log(`Seeded reference data, test accounts and 12 labelled sample workers for each of ${SAMPLES.length} services.`);

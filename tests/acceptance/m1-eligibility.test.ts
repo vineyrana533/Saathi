@@ -73,9 +73,13 @@ describe('M1 eligibility', () => {
     ).rejects.toMatchObject({ code: 'worker_unavailable' });
     expect(await searchIds(t.zone.id, 4)).not.toContain(w.worker.id);
 
-    // Back-to-back (14:00-18:00) is allowed.
+    // Back-to-back (14:00-18:00) leaves no time to travel (60-minute gap, decisions.md T-46);
+    // 15:00-19:00 is allowed.
     const third = await createUser();
-    const ok = await createBooking(third.ctx, bookingRequest({ citySlug: t.city.slug, zoneId: t.zone.id, workerId: w.worker.id, expectedTotalPaise: driverTotal(), days: 4, time: '14:00' }));
+    await expect(
+      createBooking(third.ctx, bookingRequest({ citySlug: t.city.slug, zoneId: t.zone.id, workerId: w.worker.id, expectedTotalPaise: driverTotal(), days: 4, time: '14:00' })),
+    ).rejects.toMatchObject({ code: 'worker_unavailable' });
+    const ok = await createBooking(third.ctx, bookingRequest({ citySlug: t.city.slug, zoneId: t.zone.id, workerId: w.worker.id, expectedTotalPaise: driverTotal(), days: 4, time: '15:00' }));
     expect(ok.bookingId).toBeTruthy();
   });
 

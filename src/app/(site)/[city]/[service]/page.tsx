@@ -4,6 +4,8 @@ import { notFound } from 'next/navigation';
 import { t } from '@/i18n';
 import { getCityServicePage } from '@/modules/seo/service';
 import { listZonesByCitySlug } from '@/modules/geo/service';
+import { listLocalityOptions } from '@/modules/geo/location';
+import { LocationPicker } from '@/ui/location-picker';
 import { formatInr } from '@/modules/pricing/engine';
 import { firstBookableDateIst, minutesToHhmm, todayIst } from '@/platform/time';
 import { env } from '@/platform/env';
@@ -46,7 +48,7 @@ export default async function CityServicePage({ params }: { params: Promise<Para
   const { city, service } = await params;
   const page = await getCityServicePage(city, service);
   if (!page) notFound();
-  const zones = await listZonesByCitySlug(city);
+  const [zones, localityOptions] = await Promise.all([listZonesByCitySlug(city), listLocalityOptions(city)]);
   const cfg = page.service.config;
   const rate = page.serviceCity.pricing.hourlyRatePaise ?? 0;
   const vars = { minHours: cfg.durationMinutes.min / 60, lead: cfg.leadTimeMinutes / 60, price: formatInr(rate) };
@@ -143,15 +145,28 @@ export default async function CityServicePage({ params }: { params: Promise<Para
                 </h2>
                 <form action={`/book/${service}`} method="get" className="mt-6 flex flex-col gap-5">
                   <input type="hidden" name="city" value={city} />
-                  <Field id="f-zoneId" label={t('cityService.zone')}>
-                    <Select id="f-zoneId" name="zone" required>
-                      {zones.map((z) => (
-                        <option key={z.id} value={z.id}>
-                          {z.name}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
+                  {localityOptions.length > 0 ? (
+                    <LocationPicker
+                      id="f-loc"
+                      name="loc"
+                      latName="lat"
+                      lngName="lng"
+                      label={t('cityService.zone')}
+                      help={t('location.areaHelp')}
+                      options={localityOptions}
+                      labels={{ useMine: t('location.useMine'), locating: t('location.locating'), using: t('location.using'), denied: t('location.denied'), outside: t('location.outside') }}
+                    />
+                  ) : (
+                    <Field id="f-zoneId" label={t('cityService.zone')}>
+                      <Select id="f-zoneId" name="zone" required>
+                        {zones.map((z) => (
+                          <option key={z.id} value={z.id}>
+                            {z.name}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                  )}
                   <div className="grid gap-5 sm:grid-cols-2">
                     <Field id="f-date" label={t('cityService.date')}>
                       <Input id="f-date" name="date" type="date" required defaultValue={firstDate} min={today} />

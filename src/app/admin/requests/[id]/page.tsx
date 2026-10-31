@@ -214,7 +214,7 @@ export default async function AdminRequestDetail({ params }: { params: Promise<{
                 </Field>
                 <fieldset id="f-proposedWorkerIds">
                   <legend className="text-small font-semibold">
-                    Free and eligible for this slot ({suggestions.length}). Verified for this service, work in {r.zoneName}, free for the whole time.
+                    Free and eligible for this slot ({suggestions.length}), nearest first. Verified for this service, within their travel distance of {r.localityName ?? r.zoneName}, free for the whole time including travel.
                   </legend>
                   {suggestions.length === 0 ? (
                     <p className="mt-2 text-ink-2">Nobody matches yet. You can still quote and fill places after payment.</p>
@@ -228,7 +228,7 @@ export default async function AdminRequestDetail({ params }: { params: Promise<{
                               <span className="font-semibold">{w.displayName}</span>
                               <span className="text-small text-ink-2">
                                 {' '}
-                                · {w.gender ?? 'gender not given'} · {w.yearsExperience} years · {w.languages.join(', ')} ·{' '}
+                                · {w.distanceKm != null ? `${w.distanceKm} km away · ` : ''}{w.gender ?? 'gender not given'} · {w.yearsExperience} years · {w.languages.join(', ')} ·{' '}
                                 {w.ratingCount ? `${(w.ratingAvgX100 / 100).toFixed(1)} from ${w.ratingCount}` : 'new'}
                               </span>
                             </span>

@@ -48,7 +48,9 @@ Sign in with these numbers and code `123456`. The fixed code works only for numb
 
 To try a team booking (Milestone 2): as the customer, open any service page in Delhi and choose "Ask for a quote", for example 3 event staff. As the admin, open Operations, then "Requests and quotes": take the request, tick the people to propose, save the draft and send it. As the customer, accept and pay the quote on the request page. Places you did not fill show under Bookings with the filter "Places still to fill", where you assign the rest.
 
-The seed also creates twelve sample workers per service across Delhi NCR ("Sample Driver 01", "Sample Caregiver 01", "Sample Nurse 01" and so on), so every Delhi, Noida and Gurugram service page passes the go-live threshold locally and on staging. They are not real people, have no document files and cannot sign in. Any other number gets a random code printed in the server log.
+Search is nearest first: pick an area or press "Use my current location" on a service page, and each person shows "about N km away". Workers set a home area and how far they will travel in their profile.
+
+The seed also creates twelve sample workers per service across Delhi NCR, each with a home area spread around the region and a 25 km travel distance ("Sample Driver 01", "Sample Caregiver 01", "Sample Nurse 01" and so on), so every Delhi, Noida and Gurugram service page passes the go-live threshold locally and on staging. They are not real people, have no document files and cannot sign in. Any other number gets a random code printed in the server log.
 
 ## Commands
 

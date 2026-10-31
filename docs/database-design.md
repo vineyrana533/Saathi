@@ -68,6 +68,7 @@ erDiagram
 |---|---|---|
 | `cities` | id, slug (unique), name, state, region (`delhi-ncr`, `mumbai`), status (`configured`, `live`, `paused`) | Delhi, Noida, Gurugram, Mumbai seeded. |
 | `zones` | id, city_id, slug, name; unique (city_id, slug) | For example South Delhi, Noida Sector 62, Andheri. |
+| `localities` | id, city_id, zone_id, slug, name, lat, lng; unique (city_id, slug) | Neighbourhoods with approximate centre points for distance matching (T-45). Public read, admin write. |
 | `service_categories` | id, slug, name, risk_tier (`A`, `B`, `C`), sort_order | |
 | `services` | id, category_id, slug (unique), name, summary, risk_tier, booking_mode (`direct`, `assisted`, `both`), pricing_model (`hourly`, `daily`, `fixed`, `quote`), config (jsonb, Zod-validated `ServiceConfig`), feature_flag_key, status (`draft`, `active`, `disabled`) | Config holds durations, lead time, allowed hours, workers required, location rules, booking questions, required documents, verification level, minimum rating, customer verification, matching mode, cancellation policy, payment rule, safety rules. |
 | `service_cities` | id, service_id, city_id, status (`waitlist`, `live`, `paused`), pricing (jsonb, Zod `PricingConfig`), pricing_version (int), go_live_min_workers (int); unique (service_id, city_id) | Price edits bump `pricing_version`. Confirmed bookings keep their own snapshot. |
@@ -78,7 +79,7 @@ erDiagram
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `worker_profiles` | id, user_id (unique), workforce_model (`independent`, `company`, `agency`), organisation_id, bio, languages (text[]), gender, years_experience, home_city_id, status (`applicant`, `active`, `suspended`), kyc_status, kyc_provider_ref, id_number_masked, photo_status, rating_avg_x100, rating_count, search_opt_in | No full Aadhaar or ID numbers. |
+| `worker_profiles` | id, user_id (unique), workforce_model (`independent`, `company`, `agency`), organisation_id, bio, languages (text[]), gender, years_experience, home_city_id, status (`applicant`, `active`, `suspended`), kyc_status, kyc_provider_ref, id_number_masked, photo_status, rating_avg_x100, rating_count, search_opt_in, base_locality_id, base_lat, base_lng (home base, about 1 km precision, never exposed), travel_radius_km (1 to 50, default 10) | No full Aadhaar or ID numbers. |
 | `worker_documents` | id, worker_id, doc_type (`driving_licence`, `police_certificate`, `id_proof`, `selfie`, `profile_photo`), status (`pending`, `approved`, `rejected`, `expired`), number_masked, issued_on, expires_on, attributes (jsonb, e.g. vehicle classes), storage_key, sha256, reviewed_by, reviewed_at, review_note | File is AES-256-GCM encrypted at rest. Every read writes an audit entry. |
 | `worker_service_approvals` | id, worker_id, service_id, status (`applied`, `approved`, `rejected`, `suspended`), reason, reviewed_by, reviewed_at; unique (worker_id, service_id) | Approval is per service, never global. |
 | `worker_zones` | worker_id, zone_id | Service area. |
@@ -89,7 +90,7 @@ erDiagram
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `bookings` | id, ref (unique human code), customer_user_id, service_id, city_id, zone_id, status, starts_at, ends_at, address_line, landmark, answers (jsonb), price_snapshot (jsonb), total_paise, pricing_version, workers_needed (1 to 50, default 1), hold_expires_at, start_otp_hash, end_otp_hash, otp_failed_attempts, started_at, completed_at, cancelled_at, cancelled_by, cancel_reason, created_at, updated_at | Status values in [booking-lifecycle.md](booking-lifecycle.md). |
+| `bookings` | id, ref (unique human code), customer_user_id, service_id, city_id, zone_id, locality_id, job_lat, job_lng (job location, about 100 m precision), status, starts_at, ends_at, address_line, landmark, answers (jsonb), price_snapshot (jsonb), total_paise, pricing_version, workers_needed (1 to 50, default 1), hold_expires_at, start_otp_hash, end_otp_hash, otp_failed_attempts, started_at, completed_at, cancelled_at, cancelled_by, cancel_reason, created_at, updated_at | Status values in [booking-lifecycle.md](booking-lifecycle.md). |
 | `booking_assignments` | id, booking_id, worker_id, status (`active`, `released`), slot (tstzrange), created_at | Exclusion constraint below prevents double booking. |
 | `booking_events` | id, booking_id, from_status, to_status, actor_user_id, actor_role, at, data | Full status history. |
 
@@ -124,7 +125,7 @@ There is no balance column anywhere. Balances are `SUM(credit) - SUM(debit)` (or
 | `reports` | id, reporter_user_id, entity_type, entity_id, reason, details, status, created_at | One-tap report on profile, booking or chat. |
 | `ratings` | id, booking_id, rater_user_id, ratee_user_id, direction (`customer_to_worker`, `worker_to_customer`), score (1 to 5), comment, status (`visible`, `pending_review`, `hidden`), created_at; unique (booking_id, rater_user_id, ratee_user_id) | Allowed only after completion, once per pair of people (one per worker on a team booking). Scores of 2 or less go to quality review. |
 | `customer_id_checks` | id, user_id, id_type, number_masked, status (`pending`, `approved`, `rejected`), storage_key, sha256, mime_type, reviewed_by, reviewed_at, review_note, created_at | Needed before booking in-home services (decisions.md T-32). File encrypted at rest. |
-| `service_requests` | id, ref (`RQ-`), customer_user_id, service_id, city_id, zone_id, starts_at, ends_at, duration_minutes, workers_needed (1 to 50), address_line, landmark, answers, details, budget_paise, status, owner_user_id, first_response_due_at, first_responded_at, booking_id, closed_reason, timestamps | Milestone 2. Status guard trigger. |
+| `service_requests` | id, ref (`RQ-`), customer_user_id, service_id, city_id, zone_id, locality_id, job_lat, job_lng, starts_at, ends_at, duration_minutes, workers_needed (1 to 50), address_line, landmark, answers, details, budget_paise, status, owner_user_id, first_response_due_at, first_responded_at, booking_id, closed_reason, timestamps | Milestone 2. Status guard trigger. |
 | `service_request_events` | id, request_id, from_status, to_status, actor_user_id, actor_role, data, at | Append-only (trigger). Owner changes are recorded in `data`. |
 | `quotes` | id, request_id, version, status, workers_count, starts_at, ends_at, duration_minutes, hourly_rate_paise, price_snapshot, total_paise, pricing_version, proposed_worker_ids, message_to_customer, customer_note, expires_at, sent_at, responded_at, booking_id, created_by, timestamps; unique (request_id, version); one draft or sent per request | Milestone 2. Guard trigger keeps sent quotes unchanged and closed quotes final; no deletes. The snapshot's customer lines are the quote lines. |
 | `notification_outbox` | id, channel, user_id, template, payload, idempotency_key (unique), status, attempts, last_error, created_at, sent_at | Never sent twice. |

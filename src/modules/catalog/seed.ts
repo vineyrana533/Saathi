@@ -1,7 +1,8 @@
 import { and, eq } from 'drizzle-orm';
 import { serviceCategories, serviceCities, services } from './schema';
 import { serviceConfigSchema, pricingConfigSchema, type PricingConfig, type ServiceConfig } from './config';
-import { cities, zones } from '../geo/schema';
+import { cities, localities, zones } from '../geo/schema';
+import { LOCALITY_SEED } from '../geo/localities';
 import { configValues, featureFlags } from '@/platform/db/platform-schema';
 import type { Tx } from '@/platform/db/client';
 
@@ -288,6 +289,10 @@ export async function seedCatalog(tx: Tx) {
     const [city] = await tx.select().from(cities).where(eq(cities.slug, c.slug));
     for (const z of c.zones) {
       await tx.insert(zones).values({ cityId: city!.id, slug: slugify(z), name: z }).onConflictDoNothing();
+      const [zone] = await tx.select().from(zones).where(and(eq(zones.cityId, city!.id), eq(zones.slug, slugify(z))));
+      for (const [name, lat, lng] of LOCALITY_SEED[c.slug]?.[z] ?? []) {
+        await tx.insert(localities).values({ cityId: city!.id, zoneId: zone!.id, slug: slugify(name), name, lat, lng }).onConflictDoNothing();
+      }
     }
   }
   for (const cat of CATEGORY_SEED) {
@@ -330,6 +335,7 @@ export async function seedCatalog(tx: Tx) {
     { key: 'tax.gst_on_commission_bps', value: 1800, status: 'needs_legal', note: 'L-03' },
     { key: 'tax.tds_bps', value: 0, status: 'needs_legal', note: 'L-05' },
     { key: 'request.first_response_minutes', value: 120, status: 'pending_signoff', note: 'P-10 (business minutes)' },
+    { key: 'booking.travel_gap_minutes', value: 60, status: 'pending_signoff', note: 'P-11 (gap between one person\'s jobs)' },
     { key: 'business_hours', value: { startMinute: 540, endMinute: 1140, weekdays: [0, 1, 2, 3, 4, 5] }, status: 'pending_signoff', note: 'P-10 (09:00 to 19:00 IST, Monday to Saturday)' },
   ];
   for (const d of defaults) {

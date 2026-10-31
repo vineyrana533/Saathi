@@ -72,16 +72,16 @@ Tier C services and services whose status is not `active` are left out.
 
 ### `GET /api/v1/search`
 Public (a session is optional and used for gender-preference matching). Rate limited per IP.
-Query: `service`, `city`, `zone` (uuid), `date` (YYYY-MM-DD, IST), `time` (HH:MM, IST), `duration` (minutes), `gender` (`female` or `male`, optional), `page` (default 1), and booking answers as `a.<questionId>` (for drivers `a.vehicle_class=LMV&a.transmission=manual`).
+Query: `service`, `city`, the job location as `loc` (locality uuid), or `lat` and `lng` (a phone location; tied to the nearest locality, refused with `location_outside_city` if more than 30 km from every locality of the city), or `zone` (uuid; older clients, matched by zone without distance), `date` (YYYY-MM-DD, IST), `time` (HH:MM, IST), `duration` (minutes), `gender` (`female` or `male`, optional), `page` (default 1), and booking answers as `a.<questionId>` (for drivers `a.vehicle_class=LMV&a.transmission=manual`).
 200:
 ```json
 { "live": true,
   "quote": { "lines": [{ "code": "service", "label": "Personal driver, 4 hours", "amountPaise": 100000 }], "totalPaise": 100000, "pricingVersion": 1 },
-  "workers": [{ "id": "uuid", "displayName": "...", "bio": "...", "languages": ["Hindi"], "gender": "male", "yearsExperience": 5, "ratingAvgX100": 0, "ratingCount": 0, "photoApproved": true }],
+  "workers": [{ "id": "uuid", "displayName": "...", "bio": "...", "languages": ["Hindi"], "gender": "male", "yearsExperience": 5, "ratingAvgX100": 0, "ratingCount": 0, "photoApproved": true, "distanceKm": 3.8 }],
   "hasMore": false }
 ```
-When the city-service is not live (status or supply below threshold) the response is `{ "live": false, "quote": null, "workers": [] }`.
-Errors: `not_found`, `invalid_zone`, `invalid_duration`, `invalid_time`, `too_soon`, `too_far`, `outside_hours`, `missing_answer`, `invalid_answer`, `answer_blocked` (all 422 except `not_found` 404), `rate_limited`.
+Workers come nearest first (adjusted for rating and recent workload, decisions.md T-47). `distanceKm` is the straight-line distance from their home base to the job, rounded to 0.1 km, or null when either is unknown. When the city-service is not live (status or supply below threshold) the response is `{ "live": false, "quote": null, "workers": [] }`.
+Errors: `not_found`, `invalid_zone`, `invalid_locality`, `location_required`, `location_outside_city`, `invalid_duration`, `invalid_time`, `too_soon`, `too_far`, `outside_hours`, `missing_answer`, `invalid_answer`, `answer_blocked` (all 422 except `not_found` 404), `rate_limited`.
 
 ## 4. Bookings
 
@@ -92,7 +92,7 @@ Signed in. The caller's own bookings as customer: `{ "bookings": [{ "id", "ref",
 Signed in with `booking.create` (customer, ops, admin, corporate admin). Rate limited per user.
 Body:
 ```json
-{ "serviceSlug": "personal-driver", "citySlug": "delhi", "zoneId": "uuid", "date": "2026-11-03", "time": "10:00",
+{ "serviceSlug": "personal-driver", "citySlug": "delhi", "localityId": "uuid", "date": "2026-11-03", "time": "10:00",
   "durationMinutes": 240, "answers": { "vehicle_class": "LMV", "transmission": "manual" },
   "workerId": "uuid", "addressLine": "Flat 12, Block C", "landmark": "optional", "expectedTotalPaise": 100000 }
 ```

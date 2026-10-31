@@ -1,8 +1,8 @@
 import { sql } from 'drizzle-orm';
-import { bigint, check, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { bigint, check, doublePrecision, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { users } from '../identity/schema';
 import { services } from '../catalog/schema';
-import { cities, zones } from '../geo/schema';
+import { cities, localities, zones } from '../geo/schema';
 import { workerProfiles } from '../workers/schema';
 import type { PriceSnapshot } from '../pricing/engine';
 
@@ -42,6 +42,10 @@ export const bookings = pgTable(
     endsAt: timestamp('ends_at', { withTimezone: true }).notNull(),
     addressLine: text('address_line').notNull(),
     landmark: text('landmark'),
+    /** Where the job is, for distance matching: the chosen locality's centre or the customer's phone location. */
+    localityId: uuid('locality_id').references(() => localities.id),
+    jobLat: doublePrecision('job_lat'),
+    jobLng: doublePrecision('job_lng'),
     answers: jsonb('answers').$type<Record<string, string | number | boolean>>().notNull().default({}),
     priceSnapshot: jsonb('price_snapshot').$type<PriceSnapshot>().notNull(),
     totalPaise: bigint('total_paise', { mode: 'number' }).notNull(),

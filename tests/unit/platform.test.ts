@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { normaliseIndianMobile, maskPhone } from '@/platform/auth/phone';
 import { addBusinessMinutes, fromIst, istParts } from '@/platform/time';
+import { distanceKm, nearest } from '@/modules/geo/distance';
 import { redact } from '@/platform/logger';
 import { can } from '@/platform/auth/permissions';
 import { decrypt, encrypt } from '@/platform/crypto';
@@ -98,5 +99,17 @@ describe('business hours', () => {
     expect(addBusinessMinutes(at('2026-10-28', '06:00'), 120, hours)).toEqual(at('2026-10-28', '11:00'));
     expect(addBusinessMinutes(at('2026-10-31', '18:00'), 120, hours)).toEqual(at('2026-11-02', '10:00'));
     expect(addBusinessMinutes(at('2026-11-01', '12:00'), 30, hours)).toEqual(at('2026-11-02', '09:30'));
+  });
+});
+
+describe('distance', () => {
+  it('measures straight-line kilometres', () => {
+    const cp = { lat: 28.6315, lng: 77.2167 };
+    const saket = { lat: 28.5245, lng: 77.2066 };
+    expect(distanceKm(cp, cp)).toBe(0);
+    expect(distanceKm(cp, saket)).toBeGreaterThan(11.5);
+    expect(distanceKm(cp, saket)).toBeLessThan(12.5);
+    expect(distanceKm(cp, saket)).toBeCloseTo(distanceKm(saket, cp), 9);
+    expect(nearest(saket, [cp, { lat: 28.53, lng: 77.21 }])!.item.lat).toBe(28.53);
   });
 });

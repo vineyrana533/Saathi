@@ -10,7 +10,10 @@ export function slotFromParams(service: string, sp: SearchParams) {
   return {
     serviceSlug: service,
     citySlug: one(sp.city),
-    zoneId: one(sp.zone),
+    zoneId: one(sp.zone) || undefined,
+    localityId: one(sp.loc) || undefined,
+    lat: one(sp.lat) ? Number(one(sp.lat)) : undefined,
+    lng: one(sp.lng) ? Number(one(sp.lng)) : undefined,
     date: one(sp.date),
     time: one(sp.time),
     durationMinutes: Number(one(sp.duration)) || 0,

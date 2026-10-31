@@ -5,11 +5,24 @@ import { invalid } from '@/platform/errors';
 import { scanText, explainBlock } from '../chat/moderation';
 
 const answerValue = z.union([z.string().max(300), z.number(), z.boolean()]);
+const blank = (v: unknown) => (v === '' || v === null ? undefined : v);
+/** Optional id from a form or query string, where "not given" arrives as an empty string. */
+export const optionalUuid = z.preprocess(blank, z.string().uuid().optional());
+/** Optional coordinate from a form or query string. */
+export const optionalCoord = (min: number, max: number) => z.preprocess((v) => (blank(v) === undefined ? undefined : Number(v)), z.number().min(min).max(max).optional());
+
+/** Where the job is: a locality, a phone location, or (older API clients) a zone. Resolved by geo/location.ts. */
+export const jobLocationInput = {
+  zoneId: optionalUuid,
+  localityId: optionalUuid,
+  lat: optionalCoord(6, 38),
+  lng: optionalCoord(68, 98),
+};
 
 export const slotInput = z.object({
   serviceSlug: z.string().min(1).max(60),
   citySlug: z.string().min(1).max(60),
-  zoneId: z.string().uuid(),
+  ...jobLocationInput,
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Pick a date'),
   time: z.string().regex(/^\d{2}:\d{2}$/, 'Pick a start time'),
   durationMinutes: z.coerce.number().int().positive(),

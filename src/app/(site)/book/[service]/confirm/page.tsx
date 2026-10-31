@@ -58,7 +58,7 @@ export default async function ConfirmPage({ params, searchParams }: { params: Pr
   const q = result.quote;
   const s = result.serviceInCity;
   const freeUntil = new Date(result.slot.startsAt.getTime() - s.service.config.cancellationPolicy.freeBeforeHours * 3600_000);
-  const zoneName = zones.find((z) => z.id === input.zoneId)?.name ?? '';
+  const zoneName = result.location?.localityName ?? result.location?.zoneName ?? zones.find((z) => z.id === input.zoneId)?.name ?? '';
 
   return (
     <Container className="pb-16">
@@ -87,7 +87,10 @@ export default async function ConfirmPage({ params, searchParams }: { params: Pr
 
           <h2 className="mt-10 font-display text-h3 font-semibold">{t('confirm.addressTitle')}</h2>
           <ActionForm action={confirmBookingAction} errorTitle={t('common.errorTitle')} className="mt-6">
-            {Object.entries({ service, city: input.citySlug, zone: input.zoneId, date: input.date, time: input.time, duration: String(input.durationMinutes), worker: workerId, expectedTotalPaise: String(q.customer.totalPaise) }).map(([k, v]) => (
+            {Object.entries({
+              service, city: input.citySlug, zone: input.zoneId ?? '', loc: input.localityId ?? '', lat: input.lat != null ? String(input.lat) : '', lng: input.lng != null ? String(input.lng) : '',
+              date: input.date, time: input.time, duration: String(input.durationMinutes), worker: workerId, expectedTotalPaise: String(q.customer.totalPaise),
+            }).map(([k, v]) => (
               <input key={k} type="hidden" name={k} value={v} />
             ))}
             {Object.entries(input.answers).map(([k, v]) => (

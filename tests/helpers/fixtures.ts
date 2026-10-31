@@ -78,6 +78,8 @@ export interface DriverOpts {
   licenceExpiresOn?: string;
   vehicleClasses?: string[];
   gender?: 'female' | 'male';
+  /** Home base for distance matching; without it the driver is matched by zone. */
+  base?: { lat: number; lng: number; radiusKm?: number };
 }
 
 /** A fully verified driver (unless options say otherwise), working 06:00 to 23:00 every day. */
@@ -98,6 +100,7 @@ export async function createDriver(o: DriverOpts) {
         kycStatus: 'verified',
         kycProviderRef: 'manual:test',
         photoStatus: 'approved',
+        ...(o.base ? { baseLat: o.base.lat, baseLng: o.base.lng, travelRadiusKm: o.base.radiusKm ?? 10 } : {}),
       })
       .returning();
     const nextYear = new Date(Date.now() + 365 * 86400_000).toISOString().slice(0, 10);

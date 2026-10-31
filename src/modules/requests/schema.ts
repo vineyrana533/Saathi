@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
-import { bigint, check, date, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
-import { cities, zones } from '../geo/schema';
+import { bigint, check, date, doublePrecision, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { cities, localities, zones } from '../geo/schema';
 import { users } from '../identity/schema';
 import { services } from '../catalog/schema';
 import { bookings } from '../bookings/schema';
@@ -69,6 +69,9 @@ export const serviceRequests = pgTable(
     workersNeeded: integer('workers_needed').notNull().default(1),
     addressLine: text('address_line').notNull(),
     landmark: text('landmark'),
+    localityId: uuid('locality_id').references(() => localities.id),
+    jobLat: doublePrecision('job_lat'),
+    jobLng: doublePrecision('job_lng'),
     answers: jsonb('answers').$type<Record<string, string | number | boolean>>().notNull().default({}),
     details: text('details').notNull().default(''),
     budgetPaise: bigint('budget_paise', { mode: 'number' }),

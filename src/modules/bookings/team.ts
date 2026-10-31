@@ -28,6 +28,7 @@ async function slotParams(tx: Tx, b: BookingRow) {
     config: serviceConfigSchema.parse(svc!.config),
     cityId: b.cityId,
     zoneId: b.zoneId,
+    jobPoint: b.jobLat != null && b.jobLng != null ? { lat: b.jobLat, lng: b.jobLng } : null,
     startsAt: b.startsAt,
     endsAt: b.endsAt,
     answers: b.answers,

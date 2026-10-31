@@ -3,14 +3,15 @@ import { randomInt } from 'node:crypto';
 import { z } from 'zod';
 import { OPEN_REQUEST_STATUSES, quotes, serviceRequestEvents, serviceRequests, type RequestStatus } from './schema';
 import { services } from '../catalog/schema';
-import { cities, zones } from '../geo/schema';
+import { cities, localities, zones } from '../geo/schema';
 import { consents, users } from '../identity/schema';
 import { workerProfiles } from '../workers/schema';
 import { bookingAssignments, bookingEvents, bookings } from '../bookings/schema';
 import { moderationFlags } from '../chat/schema';
 import { loadServiceInCity, type ServiceInCity } from '../catalog/service';
 import { findEligibleWorkers } from '../workers/eligibility';
-import { assertCleanAddress, validateSlot } from '../bookings/validation';
+import { resolveJobLocation } from '../geo/location';
+import { assertCleanAddress, jobLocationInput, validateSlot } from '../bookings/validation';
 import { openPaymentOrder } from '../bookings/service';
 import { tryAssign } from '../bookings/team';
 import { computePrice } from '../pricing/engine';
@@ -130,7 +131,7 @@ export async function applyRequestExpiry(tx: Tx, requestId?: string) {
 export const requestInput = z.object({
   serviceSlug: z.string().min(1).max(60),
   citySlug: z.string().min(1).max(60),
-  zoneId: z.string().uuid('Pick an area'),
+  ...jobLocationInput,
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Pick a date'),
   time: z.string().regex(/^\d{2}:\d{2}$/, 'Pick a start time'),
   durationMinutes: z.coerce.number().int().positive(),
@@ -159,8 +160,7 @@ export async function createServiceRequest(ctx: Ctx, raw: unknown) {
     if (s.service.config.customerVerification === 'id' && !(await hasVerifiedId(tx, ctx.userId!))) {
       throw conflict('customer_id_required', 'This service needs a verified ID. Add your ID in your account first.');
     }
-    const [zone] = await tx.select({ id: zones.id }).from(zones).where(and(eq(zones.id, input.zoneId), eq(zones.cityId, s.city.id))).limit(1);
-    if (!zone) throw invalid('invalid_zone', 'Pick an area in this city', { field: 'zoneId' });
+    const location = await resolveJobLocation(tx, s.city.id, input);
     const max = s.service.config.workersRequired.max;
     if (input.workersNeeded > max) {
       throw invalid('too_many_people', `You can ask for up to ${max} ${max === 1 ? 'person' : 'people'} for ${s.service.name.toLowerCase()}`, { field: 'workersNeeded' });
@@ -177,7 +177,10 @@ export async function createServiceRequest(ctx: Ctx, raw: unknown) {
         customerUserId: ctx.userId!,
         serviceId: s.service.id,
         cityId: s.city.id,
-        zoneId: zone.id,
+        zoneId: location.zoneId,
+        localityId: location.localityId,
+        jobLat: location.lat,
+        jobLng: location.lng,
         startsAt: slot.startsAt,
         endsAt: slot.endsAt,
         durationMinutes: input.durationMinutes,
@@ -229,11 +232,12 @@ export async function listMyRequests(ctx: Ctx) {
 async function loadRequestView(tx: Tx, requestId: string, includeDrafts: boolean) {
   const [row] = await tx
     .select({ request: serviceRequests, serviceName: services.name, serviceSlug: services.slug, serviceConfig: services.config,
-      riskTier: services.riskTier, cityName: cities.name, citySlug: cities.slug, zoneName: zones.name })
+      riskTier: services.riskTier, cityName: cities.name, citySlug: cities.slug, zoneName: zones.name, localityName: localities.name })
     .from(serviceRequests)
     .innerJoin(services, eq(services.id, serviceRequests.serviceId))
     .innerJoin(cities, eq(cities.id, serviceRequests.cityId))
     .innerJoin(zones, eq(zones.id, serviceRequests.zoneId))
+    .leftJoin(localities, eq(localities.id, serviceRequests.localityId))
     .where(eq(serviceRequests.id, requestId))
     .limit(1);
   if (!row) return null;
@@ -261,6 +265,7 @@ async function loadRequestView(tx: Tx, requestId: string, includeDrafts: boolean
     cityName: row.cityName,
     citySlug: row.citySlug,
     zoneName: row.zoneName,
+    localityName: row.localityName,
     startsAt: r.startsAt,
     endsAt: r.endsAt,
     durationMinutes: r.durationMinutes,
@@ -428,6 +433,9 @@ export async function acceptQuote(ctx: Ctx, quoteId: string) {
         endsAt: q.endsAt,
         addressLine: r.addressLine,
         landmark: r.landmark,
+        localityId: r.localityId,
+        jobLat: r.jobLat,
+        jobLng: r.jobLng,
         answers: r.answers,
         priceSnapshot: q.priceSnapshot,
         totalPaise: q.totalPaise,
@@ -592,6 +600,7 @@ async function eligibilityFor(tx: Tx, r: typeof serviceRequests.$inferSelect, co
   const [customer] = await tx.select({ gender: users.gender }).from(users).where(eq(users.id, r.customerUserId)).limit(1);
   return findEligibleWorkers(tx, {
     serviceId: r.serviceId, config, cityId: r.cityId, zoneId: r.zoneId, startsAt: r.startsAt, endsAt: r.endsAt,
+    jobPoint: r.jobLat != null && r.jobLng != null ? { lat: r.jobLat, lng: r.jobLng } : null,
     answers: r.answers, customerGender: customer?.gender ?? null, ...extra,
   });
 }

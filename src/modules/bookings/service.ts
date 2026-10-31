@@ -8,6 +8,7 @@ import { workerProfiles } from '../workers/schema';
 import { payments } from '../payments/schema';
 import { loadServiceInCity, type ServiceInCity } from '../catalog/service';
 import { findEligibleWorkers } from '../workers/eligibility';
+import { resolveJobLocation, type JobLocation } from '../geo/location';
 import { computePrice, cancellationFee, type PriceSnapshot } from '../pricing/engine';
 import { supplyStatus } from '../seo/supply';
 import { postJournal, type JournalLineInput } from '../payments/ledger';
@@ -30,6 +31,7 @@ import { paymentGateway } from '@/platform/adapters/payments';
 export interface SearchResult {
   serviceInCity: ServiceInCity;
   live: boolean;
+  location: JobLocation | null;
   slot: { startsAt: Date; endsAt: Date } | null;
   quote: PriceSnapshot | null;
   workers: Awaited<ReturnType<typeof findEligibleWorkers>>;
@@ -56,9 +58,8 @@ export async function searchAvailableWorkers(
     const s = await loadServiceInCity(tx, input.serviceSlug, input.citySlug);
     if (!s) throw notFound('Service');
     const supply = await supplyStatus(tx, ctx, s);
-    if (!supply.live) return { serviceInCity: s, live: false, slot: null, quote: null, workers: [] };
-    const zone = await tx.select().from(zones).where(and(eq(zones.id, input.zoneId), eq(zones.cityId, s.city.id))).limit(1);
-    if (!zone.length) throw invalid('invalid_zone', 'Pick an area in this city', { field: 'zoneId' });
+    if (!supply.live) return { serviceInCity: s, live: false, location: null, slot: null, quote: null, workers: [] };
+    const location = await resolveJobLocation(tx, s.city.id, input);
     const slot = validateSlot(s.service.config, input);
     const customerGender = ctx.userId
       ? (await tx.select({ g: users.gender }).from(users).where(eq(users.id, ctx.userId)).limit(1))[0]?.g ?? null
@@ -69,7 +70,8 @@ export async function searchAvailableWorkers(
         serviceId: s.service.id,
         config: s.service.config,
         cityId: s.city.id,
-        zoneId: input.zoneId,
+        zoneId: location.zoneId,
+        jobPoint: location.lat != null && location.lng != null ? { lat: location.lat, lng: location.lng } : null,
         startsAt: slot.startsAt,
         endsAt: slot.endsAt,
         answers: slot.answers,
@@ -79,7 +81,7 @@ export async function searchAvailableWorkers(
         offset: (page - 1) * 20,
       }),
     );
-    return { serviceInCity: s, live: true, slot, quote: snapshotFor(s, input.durationMinutes), workers };
+    return { serviceInCity: s, live: true, location, slot, quote: snapshotFor(s, input.durationMinutes), workers };
   });
 }
 
@@ -108,8 +110,8 @@ export async function createBooking(ctx: Ctx, raw: CreateBookingInput) {
       }
       const supply = await supplyStatus(tx, ctx, s);
       if (!supply.live) throw conflict('not_live', `${s.service.name} is not open for booking in ${s.city.name} yet`);
-      const [zone] = await tx.select().from(zones).where(and(eq(zones.id, input.zoneId), eq(zones.cityId, s.city.id))).limit(1);
-      if (!zone) throw invalid('invalid_zone', 'Pick an area in this city', { field: 'zoneId' });
+      const location = await resolveJobLocation(tx, s.city.id, input);
+      const jobPoint = location.lat != null && location.lng != null ? { lat: location.lat, lng: location.lng } : null;
       const slot = validateSlot(s.service.config, input);
 
       // Server-side price. The client must have seen exactly this total.
@@ -132,7 +134,8 @@ export async function createBooking(ctx: Ctx, raw: CreateBookingInput) {
           serviceId: s.service.id,
           config: s.service.config,
           cityId: s.city.id,
-          zoneId: zone.id,
+          zoneId: location.zoneId,
+          jobPoint,
           startsAt: slot.startsAt,
           endsAt: slot.endsAt,
           answers: slot.answers,
@@ -152,7 +155,10 @@ export async function createBooking(ctx: Ctx, raw: CreateBookingInput) {
           customerUserId: ctx.userId!,
           serviceId: s.service.id,
           cityId: s.city.id,
-          zoneId: zone.id,
+          zoneId: location.zoneId,
+          localityId: location.localityId,
+          jobLat: location.lat,
+          jobLng: location.lng,
           status: 'pending_payment',
           startsAt: slot.startsAt,
           endsAt: slot.endsAt,

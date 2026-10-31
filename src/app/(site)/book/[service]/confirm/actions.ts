@@ -19,7 +19,10 @@ export async function confirmBookingAction(_: ActionState, fd: FormData): Promis
     const out = await createBooking(ctx, {
       serviceSlug: str(fd, 'service'),
       citySlug: str(fd, 'city'),
-      zoneId: str(fd, 'zone'),
+      zoneId: str(fd, 'zone') || undefined,
+      localityId: str(fd, 'loc') || undefined,
+      lat: str(fd, 'lat') ? Number(str(fd, 'lat')) : undefined,
+      lng: str(fd, 'lng') ? Number(str(fd, 'lng')) : undefined,
       date: str(fd, 'date'),
       time: str(fd, 'time'),
       durationMinutes: Number(str(fd, 'duration')),

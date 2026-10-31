@@ -3,7 +3,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { t } from '@/i18n';
 import { getServiceInCity } from '@/modules/catalog/service';
-import { listZonesByCitySlug } from '@/modules/geo/service';
+import { listLocalityOptions } from '@/modules/geo/location';
+import { LocationPicker } from '@/ui/location-picker';
 import { hasCurrentConsent } from '@/modules/identity/service';
 import { myIdCheck } from '@/modules/identity/id-check';
 import { formatInr } from '@/modules/pricing/engine';
@@ -26,8 +27,8 @@ export default async function NewRequestPage({ searchParams }: { searchParams: P
   const s = await getServiceInCity(service, city);
   if (!s) notFound();
   const cfg = s.service.config;
-  const [zones, consented, idCheck] = await Promise.all([
-    listZonesByCitySlug(city),
+  const [localityOptions, consented, idCheck] = await Promise.all([
+    listLocalityOptions(city),
     hasCurrentConsent(ctx, 'code_of_conduct'),
     cfg.customerVerification === 'id' && session.roles.includes('customer') ? myIdCheck(ctx) : Promise.resolve(null),
   ]);
@@ -61,15 +62,7 @@ export default async function NewRequestPage({ searchParams }: { searchParams: P
         <Field id="f-workersNeeded" label={t('requests.people')} help={t('requests.peopleHelp', { max: cfg.workersRequired.max })}>
           <Input id="f-workersNeeded" name="workersNeeded" type="number" inputMode="numeric" min={1} max={cfg.workersRequired.max} defaultValue={1} required className="max-w-32" />
         </Field>
-        <Field id="f-zoneId" label={t('cityService.zone')}>
-          <Select id="f-zoneId" name="zoneId" required>
-            {zones.map((z) => (
-              <option key={z.id} value={z.id}>
-                {z.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
+        <LocationPicker id="f-loc" name="loc" latName="lat" lngName="lng" label={t('cityService.zone')} help={t('location.areaHelp')} options={localityOptions} labels={{ useMine: t('location.useMine'), locating: t('location.locating'), using: t('location.using'), denied: t('location.denied'), outside: t('location.outside') }} />
         <div className="grid gap-5 sm:grid-cols-2">
           <Field id="f-date" label={t('cityService.date')}>
             <Input id="f-date" name="date" type="date" required defaultValue={firstDate} min={todayIst()} />
